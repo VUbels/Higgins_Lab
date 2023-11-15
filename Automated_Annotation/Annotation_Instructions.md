@@ -1,1 +1,0 @@
-Template holder annotation instructions
