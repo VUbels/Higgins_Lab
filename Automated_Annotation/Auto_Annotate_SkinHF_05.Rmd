@@ -1,0 +1,131 @@
+---
+title: "Auto_Annotate_SkinHF_05.Rmd"
+author: "Victor Ubels"
+date: "2023-12-06"
+output: html_document
+---
+
+```{r}
+setwd("D:/R_Scripts/Seurat/Automated_scRNA_Annotation_Scripts/")
+
+r_files <- list.files(pattern = "\\.R$", full.names = TRUE)
+
+# Source each file
+for (file in r_files) {
+  source(file)
+}
+```
+
+```{r}
+dir.create(paste0(output_directory, "Clustering_04"))
+
+pointSize <- 1.5
+
+for (i in seq_along(subgroups)) {
+    
+    subgroup <- subgroups[i]
+    plot_genes <- plot_genesList[i]
+    plot_genes <- unlist(plot_genes)
+    
+    obj <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+    message("Currently processing subgroup ", subgroup[i])
+  
+  obj$cell_type <- sapply(obj@meta.data$FineClust, function(x) {
+  if (is.null(subCluster_Annotation[[x]])) {
+    return(NA) # or "Unknown" or any other placeholder you wish to use for non-mapped keys
+  } else {
+    return(subCluster_Annotation[[x]])
+  }
+})
+
+# Dot plot of marker Genes:
+count_mat <- GetAssayData(object=obj, slot="counts")
+avgPctMat <- avgAndPctExpressed(count_mat, obj$cell_type, feature_normalize=TRUE, min_pct=5)
+
+# Subset to genes we care about:
+avgPctMat <- avgPctMat[avgPctMat$feature %in% plot_genes,]
+
+# Determine cluster and gene order:
+wide_df <- unmelt_alt(avgPctMat, row_col="feature", col_col="grp", val_col="avgExpr")
+wide_df <- prettyOrderMat(wide_df)
+
+# Threshold min pct
+avgPctMat$pctExpr[avgPctMat$pctExpr < 5] <- 0
+
+grp_order <- colnames(wide_df$mat)
+gene_order <- rev(rownames(wide_df$mat))
+
+plotDir = paste0(output_directory, 'Clustering_04/', subgroup, '/')  
+
+dotPlot(avgPctMat, xcol="grp", ycol="feature", color_col="avgExpr", size_col="pctExpr",
+yorder=rev(gene_order), cmap=cmaps_BOR$sunrise, aspectRatio=1.6)
+output_filename <- paste0(plotDir, "/Dotplot_TrueMarker_", subgroup, "_cluster_output.png")
+ggsave(filename = output_filename, width = 15, height = 10, dpi = 1200)
+
+obj <- SetIdent(obj, value = obj@meta.data$cell_type)
+
+fineclust_cmap <- cmaps_BOR$stallion[1:length(subCluster_Annotation)]
+names(fineclust_cmap) <- names(getFreqs(obj$FineClust))
+
+label_cmap <- fineclust_cmap
+names(label_cmap) <- unlist(subCluster_Annotation)[names(label_cmap)]
+umapDF <- data.frame(Embeddings(object = obj, reduction = "umap"), unlist(subCluster_Annotation)[obj$FineClust])
+  # Randomize cells before plotting UMAP
+set.seed(1)
+umapDF <- umapDF[sample(nrow(umapDF)),]
+
+plotDir = paste0(output_directory, 'Clustering_04/', subgroup, '/')
+  
+pdf(paste0(plotDir, "/LabeledClust_UMAP.pdf"), width=10, height=10)
+print(plotUMAP(umapDF, dataType = "qualitative", cmap = label_cmap, namedColors=TRUE,   point_size=pointSize))
+
+dev.off()
+
+
+#Save object with manual fully assigned labeleling
+saveRDS(obj, file = paste0(output_directory, 'Clustering_04/',subgroup, '/', subgroup, '.rds'))
+
+}
+
+
+obj <- readRDS(paste0(output_directory, 'Clustering_03/Broad_Annotated_Skin.rds'))
+
+FineClustLabels <- obj$NamedClust
+names(FineClustLabels) <- Cells(obj)
+
+for(subgroup in subgroups){
+    message(sprintf("Reading in subcluster %s", subgroup))
+
+    # Read in subclustered object
+    sub_dir <- paste0(output_directory, "/Clustering_04/", subgroup)
+    sub_obj <- readRDS(paste0(sub_dir, sprintf('/%s.rds', subgroup)))
+
+    # Add Manual labels to full Seurat object
+    FineClustLabels[Cells(sub_obj)] <- sub_obj$cell_type
+}
+
+obj$FineClust <- FineClustLabels[Cells(obj)]
+
+unique(obj$FineClust)
+
+### FineCluster UMAP ###
+umapDF <- data.frame(Embeddings(object = obj, reduction = "umap"), obj$FineClust)
+# Randomize cells before plotting
+set.seed(1)
+umapDF <- umapDF[sample(nrow(umapDF)),]
+
+# It's unclear how plotUMAP is defined in your environment as it's not a standard Seurat function.
+# Assuming you have a function called `plotUMAP`, we will proceed, 
+# but please make sure that function can take the dataframe `umapDF` as input.
+pointSize <- 0.05
+plotUMAP(umapDF, dataType="qualitative", cmap=cmaps_BOR$stallion, point_size=pointSize)
+output_filename <- paste0(output_directory, "/Clustering_04/Complete_Annotated_", project_name ,"_DimPlot.png")
+ggsave(filename = output_filename, width = 15, height = 10, dpi = 1200)
+
+# Save whole project with all cluster information:
+output_filename <- paste0(output_directory, "/Complete_Annotated_", project_name ,"_Object.rds")
+
+saveRDS(obj, output_filename)
+
+winDialog("ok", "Script finished running")
+```

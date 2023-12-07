@@ -1,0 +1,169 @@
+---
+title: "Fibroblast_Cluster_Script"
+author: "Victor Ubels"
+date: "2023-11-01"
+output: html_document
+---
+
+```{r}
+setwd("D:/R_Scripts/Seurat/Automated_scRNA_Annotation_Scripts/")
+
+r_files <- list.files(pattern = "\\.R$", full.names = TRUE)
+
+# Source each file
+for (file in r_files) {
+  source(file)
+}
+
+#Set up work directory
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_knit$set(root.dir = output_directory)
+```
+
+```{r}
+pointSize <- 1.5
+useMagic <- TRUE # Should Rmagic be used for data imputation prior to UMAP plotting?
+cmap <- readRDS(paste0(script_directory, 'Automated_scRNA_Annotation_Scripts/sample_cmap.rds'))
+
+use_python("C:/Users/UVict/miniconda3/python.exe", required = TRUE)
+py_module_available("magic")
+import("magic")
+pymagic <- import('magic')
+```
+
+```{r}
+for (i in seq_along(subgroups)) {
+    
+    subgroup <- subgroups[i]
+    subgroup_tag <- subgroup_tag[i]
+    subClusterGroups_Clust <- subClusterGroups_Cluster[i]
+
+    obj <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+    message("Currently processing subgroup ", subgroup[i])
+    allGenes <- rownames(obj)
+
+    # Now, assign cluster names:
+    nclust <- length(unique(obj$Clusters))
+    fineClust <- sapply(1:nclust, function(x) paste0(subClusterGroups_Clust, x))
+    names(fineClust) <- 0:(nclust-1)
+
+    obj$FineClust <- fineClust[obj$Clusters] %>% unname
+    Idents(obj) <- "FineClust"
+    
+    message("Plotting selected marker features on UMAP...")
+
+# Set colormaps
+  qualcmap <- cmaps_BOR$stallion
+  quantcmap <- cmaps_BOR$sunrise
+
+# Get expression data:
+  expr <- GetAssayData(obj, slot = 'data') %>% t()
+  expr <- expr[,Matrix::colSums(expr) > 0] # Remove unexpressed genes
+
+# Markers for identifying broad classes of cells:
+  hla_genes <- grep(pattern = "^HLA-", x = colnames(expr), value = TRUE)
+
+ selectedGenes <- featureSetsList[[i]] %>% unname()
+ selectedGenes <- unlist(selectedGenes)
+ selectedGenes
+ 
+ featureSets <- featureSetsList[[i]]
+ message("running through genes", featureSets)
+ 
+flag <- "noMagic"
+# Smooth with Rmagic
+if(useMagic){
+    message("Using MAGIC to impute (smooth) data for plotting...")
+    # Run MAGIC directly on the expression matrix
+    expr <- magic_alt(expr, genes=selectedGenes, n.jobs = 1, seed = 1)$result
+    flag <- "yesMagic"
+}
+
+plotDir = paste0(output_directory, 'Clustering_03/', subgroup, '/')
+
+  message("Generating feature UMAPS for ", subgroup)
+  
+for(name in names(featureSets)){
+        tryCatch({
+        features <- featureSets[[name]]
+        pdf(paste0(plotDir,"/", name, "_", subgroups[i], "_features_UMAP.pdf"))
+        for(gene in features){
+            if(!gene %in% allGenes){
+                message(sprintf("Error: %s is not a valid gene name", gene))
+            }else if(!gene %in% colnames(expr)){
+                message(sprintf("Error: %s is not expressed in any of these cells", gene))
+            }else{
+                umapDF <- data.frame(Embeddings(object = obj, reduction = "umap"), expr[,gene])        
+                colnames(umapDF) <- c("UMAP1", "UMAP2", gene)
+                # Clip range of expression:
+                upperLim <- quantile(umapDF[,gene], probs=c(0.95))
+                umapDF[,gene][umapDF[,gene] >= upperLim] <- upperLim
+                print(plotUMAP(umapDF, dataType = "quantitative", cmap = quantcmap, covarLabel = gene, point_size = pointSize))
+                
+            } 
+        }
+        }, error = function(e) {
+        message("Error in plot generation: ", e$message)
+    })
+      dev.off()
+}
+
+saveRDS(obj, file = paste0(output_directory, 'Clustering_03/',subgroup, '/', subgroup, '.rds'))  
+  
+}
+
+for (i in seq_along(subgroups)) {
+    
+    subgroup <- subgroups[i]
+    subgroup_tag <- subgroup_tag[i]
+    subClusterGroups_Clust <- subClusterGroups_Cluster[i]
+    
+    obj <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+    message("Currently processing subgroup ", subgroup)
+    allGenes <- rownames(obj)
+    
+  message("Generating DotPlot for ", subgroup[i])
+
+# Dot plot of marker Genes:
+  count_mat <- GetAssayData(object = obj, slot = "counts")
+  avgPctMat <- avgAndPctExpressed(count_mat, obj$FineClust, feature_normalize=TRUE, min_pct=5)
+
+  featureSets <- featureSetsList[[i]]
+  
+# Subset to genes we care about:
+  subGenes <- featureSets %>% do.call("c",.)
+  avgPctMat <- avgPctMat[avgPctMat$feature %in% subGenes,]
+
+# Determine cluster and gene order:
+  wide_df <- unmelt_alt(avgPctMat, row_col="feature", col_col="grp", val_col="avgExpr")
+  wide_df <- prettyOrderMat(wide_df)
+
+  grp_order <- colnames(wide_df$mat)
+  gene_order <- rev(rownames(wide_df$mat))
+  
+  plotDir = paste0(output_directory, 'Clustering_03/', subgroup, '/')
+  
+  dotPlot(avgPctMat, xcol="grp", ycol="feature", color_col="avgExpr", size_col="pctExpr", xorder=grp_order, yorder=gene_order, cmap=cmaps_BOR$sunrise)
+  output_filename <- paste0(plotDir, "/Dotplot_", subgroup, "_cluster_output.png")
+  ggsave(filename = output_filename, width = 15, height = 10, dpi = 1200)
+
+# Order labels by frequency:
+  fineclust_cmap <- cmaps_BOR$stallion[1:length(fineClust)]
+  names(fineclust_cmap) <- names(getFreqs(obj$FineClust))
+# Save color palette for 'NamedClust'
+  saveRDS(fineclust_cmap, file = paste0(output_directory, sprintf("/rna_cmap_%s.rds", subgroup)))
+
+### Cluster UMAP ###
+  umapDF <- data.frame(Embeddings(object = obj, reduction = "umap"), obj$FineClust)
+# Randomize cells before plotting UMAP
+  set.seed(1)
+  umapDF <- umapDF[sample(nrow(umapDF)),]
+
+  plotUMAP(umapDF, dataType = "qualitative", cmap = fineclust_cmap, namedColors=TRUE, point_size=pointSize)
+  output_filename <- paste0(output_directory, "/Clustering_03/", subgroup, "/QuantUMAPplot_", subgroup, ".png")
+  ggsave(filename = output_filename, width = 15, height = 10, dpi = 1200)
+  
+}
+
+winDialog("ok", "Script finished running")
+```

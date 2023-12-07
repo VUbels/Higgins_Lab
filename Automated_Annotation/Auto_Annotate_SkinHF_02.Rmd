@@ -1,0 +1,304 @@
+---
+title: "Automatic Annotation Script for Skin and HF scRNA sequence data 02"
+author: "Victor Ubels"
+date: "November 2023"
+output:
+  html_notebook: 
+    toc: yes
+  html_document:
+    keep_md: yes
+    highlight: pygments
+    df_print: paged
+    toc: yes
+    toc_float: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+### Parameters for batch processing of scRNA files
+
+setwd("D:/R_Scripts/Seurat/Automated_scRNA_Annotation_Scripts/")
+
+r_files <- list.files(pattern = "\\.R$", full.names = TRUE)
+
+# Source each file
+for (file in r_files) {
+  source(file)
+}
+
+#Set up work directory
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_knit$set(root.dir = output_directory)
+```
+
+```{r}
+seurat_obj_merged <- readRDS(file = paste0(output_directory, "/Clustering_01/Cluster_01_Seurat_Object.rds"))
+
+seurat_obj_merged <- subset(seurat_obj_merged, idents = idents_drop, invert = TRUE)
+
+rawCounts <- GetAssayData(object = seurat_obj_merged, slot = "counts")
+
+# Identify genes we want to blacklist during clustering
+
+# mitochondrial:
+mt.genes <- grep(pattern = "^MT-", x = rownames(rawCounts), value = TRUE)
+# Cell cycle (These are loaded by Seurat)
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+
+# X/Y chromosome genes:
+txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+geneGR <- GenomicFeatures::genes(txdb)
+sexGenesGR <- geneGR[seqnames(geneGR) %in% c("chrY", "chrX")]
+matchedGeneSymbols <- select(org.Hs.eg.db,
+                        keys = sexGenesGR$gene_id,
+                        columns = c("ENTREZID", "SYMBOL"),
+                        keytype = "ENTREZID")
+sexChr.genes <- matchedGeneSymbols$SYMBOL
+
+
+# Genes to ignore (just for clustering purposes)
+blacklist.genes <- c(
+    mt.genes,
+    sexChr.genes,
+    s.genes,
+    g2m.genes
+)
+
+#Initialize list for storing iterative LSI output
+lsiOut <- list()
+clusters <- NULL
+
+# Depth normalize to 10,000, add pseudo count, and then log2 transform
+log2CP10k <- sparseLogX(rawCounts, logtype="log2", scale=TRUE, scaleFactor=10^4)
+# Store the log2CP10k
+seurat_obj_merged <- SetAssayData(object = seurat_obj_merged, slot = "data", new.data = log2CP10k)
+
+message("Running iterative LSI...")
+set.seed(1)
+for(i in seq_along(resolution)){
+    # If first round, compute variable genes on raw data first
+    if(i == 1){
+        message(sprintf("Identifying top %s variable genes among all cells...", nVarGenes))
+        varGenes <- getVarGenes(log2CP10k, nvar = nVarGenes, blacklist = blacklist.genes)
+    }else{
+        # For remaining rounds, calculate variable genes using previous clusters
+        clusterMat <- edgeR::cpm(groupSums(rawCounts, clusters, sparse = TRUE), log=TRUE, prior.count = 3)
+        message(sprintf("Identifying top %s variable genes from round %s LSI...", nVarGenes, i-1))
+        varGenes <- getVarGenes(clusterMat, nvar = nVarGenes, blacklist = blacklist.genes)
+    }
+    # Now run LSI and find clusters
+    LSIi <- runLSI(rawCounts[varGenes,], nComponents = max(nPCs), binarize = FALSE)
+
+    # 'Harmonize' SVD PCs, if indicated
+    if(i %in% harmonize){
+      message(sprintf("Harmonizing LSI SVD PCs for round %s...", i))
+      harmonized_pcs <- HarmonyMatrix(
+        data_mat  = LSIi$matSVD,
+        meta_data = obj@meta.data,
+        vars_use  = covariates, # Covariates to 'harmonize'
+        do_pca    = FALSE
+        )
+      LSIi$matSVD <- harmonized_pcs
+    }
+
+    reducName <- paste0("LSI_iter",i)
+    seurat_obj_merged[[reducName]] <- CreateDimReducObject(embeddings = LSIi$matSVD, key = sprintf("LSI%s_", i), assay = "RNA")
+    seurat_obj_merged <- FindNeighbors(object = seurat_obj_merged, reduction = reducName, dims = nPCs, force.recalc = TRUE)
+    message(sprintf("Clustering with resolution %s...", resolution[i]))
+    seurat_obj_merged <- FindClusters(object = seurat_obj_merged, resolution = recluster_resolution[i])
+    clusters <- Idents(seurat_obj_merged)
+    #Store information
+    lsiOut[[reducName]] <- list(
+        lsiMat = LSIi$matSVD,
+        svd = LSIi$svd,
+        varFeatures = varGenes, 
+        clusters = clusters
+    )
+}
+```
+
+```{r}
+# Store cluster information in metadata
+seurat_obj_merged$Clusters <- Idents(seurat_obj_merged)
+
+# Seurat uses the uwot implementation of UMAP by default
+message("Calculating UMAP...")
+set.seed(1)
+
+umapNeighbors <- 50
+umapMinDist <- 0.5
+umapDistMetric <- "cosine"
+
+seurat_obj_merged <- RunUMAP(
+  seurat_obj_merged,
+  reduction = paste0("LSI_iter",length(recluster_resolution)), # Use final LSI iteration 
+  dims = nPCs,
+  n.neighbors = umapNeighbors,
+  min.dist = umapMinDist,
+  metric = umapDistMetric
+)
+
+#Generates a Preclustering directory in the output directory
+dir.create(paste0(output_directory, "Clustering_02"))
+
+# Save clustered object here:
+saveRDS(seurat_obj_merged, file = paste0(output_directory, "/Clustering_02/Cluster_02_Seurat_Object.rds"))
+
+# Save iterativeLSI info
+saveRDS(lsiOut, file = paste0(output_directory, "/Clustering_02/lsiOut_Cluster_02.rds"))
+
+DimPlot(seurat_obj_merged, label = TRUE, split.by = 'diseaseStatus')
+ggsave(filename = paste0(output_directory, "Clustering_02/Split_By_Disease.pdf"), plot = last_plot(), width = 20)
+
+message("Done.")
+```
+
+```{r}
+seurat_object.markers <- FindAllMarkers(seurat_obj_merged, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+MarkerTibble <- seurat_object.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 25, wt = avg_log2FC)
+MarkerTibble
+
+output_filename_markers <- paste0(output_directory, "Clustering_02/Markers_BroadCluster_", dataset, ".xlsx")
+write_xlsx(MarkerTibble, output_filename_markers)
+```
+
+```{r}
+subgroup <- "postlustered"
+pointSize <- 0.2
+useMagic <- TRUE
+allGenes <- rownames(seurat_obj_merged)
+
+message("Plotting selected marker features on UMAP...")
+
+# Set colormaps
+qualcmap <- cmaps_BOR$stallion
+quantcmap <- cmaps_BOR$sunrise
+
+dir.create(paste0(output_directory, "Clustering_02/Broad_UMAPs"))
+
+# Get expression data:
+expr <- GetAssayData(seurat_obj_merged, slot = 'data') %>% t()
+expr <- as(expr[,Matrix::colSums(expr) > 0], "sparseMatrix") # Remove unexpressed genes
+
+allGenes <- rownames(seurat_obj_merged)
+selectedGenes <- unlist(featureSets_broad) %>% unname()
+
+flag <- "noMagic"
+
+pymagic <- import("magic")
+
+if(useMagic){
+    message("Using MAGIC to impute (smooth) data for plotting...")
+
+    # Run MAGIC directly on the expression matrix
+    expr <- magic_alt(expr, genes=selectedGenes, n.jobs = 1, seed = 1)$result
+    flag <- "yesMagic"
+}
+
+qualcmap <- cmaps_BOR$stallion
+quantcmap <- cmaps_BOR$sunrise
+
+for(name in names(featureSets_broad)){
+    features <- featureSets_broad[[name]]
+    pdf(paste0(output_directory,"/Clustering_02/Broad_UMAPs/", name, "_features_UMAP.pdf"))
+    for(gene in features){
+        if(!gene %in% allGenes){
+            message(sprintf("Error: %s is not a valid gene name", gene))
+        }else{
+            umapDF <- data.frame(Embeddings(object = seurat_obj_merged, reduction = "umap"), expr[,gene])        
+            colnames(umapDF) <- c("UMAP1", "UMAP2", gene)
+            # Clip range of expression:
+            upperLim <- quantile(umapDF$gene, probs=c(0.95))
+            umapDF[,gene][umapDF[,gene] >= upperLim] <- upperLim
+            print(plotUMAP(umapDF, dataType = "quantitative", cmap = quantcmap, covarLabel = gene, point_size=pointSize))
+        } 
+    }
+    dev.off()
+}
+
+```
+
+```{r}
+pointSize <- 0.5
+
+message("Plotting selected marker features on UMAP...")
+
+# Get expression data:
+expr <- GetAssayData(seurat_obj_merged, slot = 'data') %>% t()
+expr <- as(expr[,Matrix::colSums(expr) > 0], "sparseMatrix") # Remove unexpressed genes
+
+allGenes <- rownames(seurat_obj_merged)
+selectedGenes <- unlist(featureSets_specific) %>% unname()
+
+flag <- "noMagic"
+
+pymagic <- import("magic")
+
+if(useMagic){
+    message("Using MAGIC to impute (smooth) data for plotting...")
+
+    # Run MAGIC directly on the expression matrix
+    expr <- magic_alt(expr, genes=selectedGenes, n.jobs = 1, seed = 1)$result
+    flag <- "yesMagic"
+}
+
+
+qualcmap <- cmaps_BOR$stallion
+quantcmap <- cmaps_BOR$sunrise
+
+dir.create(paste0(output_directory, "Clustering_02/Specific_CellType_UMAPs"))
+
+for(name in names(featureSets_specific)){
+    features <- featureSets_specific[[name]]
+    pdf(paste0(output_directory,"Clustering_02/Specific_CellType_UMAPs/", name, "_features_UMAP.pdf"))
+    for(gene in features){
+        if(!gene %in% allGenes){
+            message(sprintf("Error: %s is not a valid gene name", gene))
+        }else{
+            umapDF <- data.frame(Embeddings(object = seurat_obj_merged, reduction = "umap"), expr[,gene])        
+            colnames(umapDF) <- c("UMAP1", "UMAP2", gene)
+            # Clip range of expression:
+            upperLim <- quantile(umapDF$gene, probs=c(0.95))
+            umapDF[,gene][umapDF[,gene] >= upperLim] <- upperLim
+            print(plotUMAP(umapDF, dataType = "quantitative", cmap = quantcmap, covarLabel = gene, point_size=pointSize))
+        } 
+    }
+    dev.off()
+}
+
+# Dot plot of cluster markers
+count_mat <- GetAssayData(object = seurat_obj_merged, slot = "counts")
+avgPctMat <- avgAndPctExpressed(count_mat, seurat_obj_merged$Clusters, feature_normalize=TRUE, min_pct=5)
+
+# Subset to genes we care about:
+subGenes <- featureSets_specific %>% do.call("c",.)
+avgPctMat <- avgPctMat[avgPctMat$feature %in% subGenes,]
+
+# Threshold min pct
+avgPctMat$pctExpr[avgPctMat$pctExpr < 5] <- 0
+
+# Determine cluster and gene order:
+wide_df <- unmelt_alt(avgPctMat, row_col="feature", col_col="grp", val_col="avgExpr")
+
+#wide_df <- prettyOrderMat(wide_df[,rnaOrder], clusterCols=FALSE)
+wide_df <- prettyOrderMat(wide_df, clusterCols=TRUE)
+
+grp_order <- colnames(wide_df$mat)
+gene_order <- rev(rownames(wide_df$mat))
+
+p <- dotPlot(avgPctMat, xcol="grp", ycol="feature", color_col="avgExpr", size_col="pctExpr", xorder=grp_order, yorder=gene_order, cmap=cmaps_BOR$sunrise)
+ggsave(filename = paste0(output_directory, "Clustering_02/DotPlot_Markers.pdf"), plot = p, width = 15, height = 10, dpi = 1200)
+
+saveRDS(avgPctMat, file = paste0(output_directory, "Clustering_02/AvgPCtMat.rds"))
+```
+
+```{r}
+saveRDS(seurat_obj_merged, paste0(output_directory, "Clustering_02/Cluster_02_Seurat_Object.rds"))
+
+winDialog("ok", "Script finished running")
+```
