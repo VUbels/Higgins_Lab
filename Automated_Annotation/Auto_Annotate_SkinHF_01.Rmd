@@ -108,6 +108,8 @@ rm(seurat.objects)
 
 Doublet removal
 ```{r}
+dir.create(paste0(output_directory_base, "/", project_name, "/Clustering_01/"))
+
 # Retrieve all objects in the global environment that match the pattern "seurat_"
 seurat.objects_names <- ls(envir = .GlobalEnv, pattern = "^GSM")
 
