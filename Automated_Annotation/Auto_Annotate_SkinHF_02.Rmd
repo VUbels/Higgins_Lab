@@ -203,7 +203,7 @@ if(useMagic){
 qualcmap <- cmaps_BOR$stallion
 quantcmap <- cmaps_BOR$sunrise
 
-Gene_Error_Log__Broad_file <- paste0(output_directory, "Clustering_02/Broad_UMAPs/Gene_Error_logging.txt")
+Gene_Error_Log_Broad_file <- paste0(output_directory, "Clustering_02/Broad_UMAPs/Gene_Error_logging.txt")
 
 for(name in names(featureSets_broad)) {
     features <- featureSets_broad[[name]]
@@ -224,7 +224,7 @@ for(name in names(featureSets_broad)) {
         }, error = function(e) {
             error_message <- sprintf("An error occurred with gene %s in feature set %s. Continuing with next gene.", gene, name)
             message(error_message)
-            write(error_message, file = Gene_Error_Log_file, append = TRUE)
+            write(error_message, file = Gene_Error_Log_Broad_file, append = TRUE)
         })
     }
     dev.off()
@@ -262,7 +262,7 @@ quantcmap <- cmaps_BOR$sunrise
 
 dir.create(paste0(output_directory, "Clustering_02/Specific_CellType_UMAPs"))
 
-Gene_Error_Log_file <- paste0(output_directory, "Clustering_02/Specific_CellType_UMAPs/Gene_Error_logging.txt")
+Gene_Error_Specific_Log_file <- paste0(output_directory, "Clustering_02/Specific_CellType_UMAPs/Gene_Error_logging.txt")
 
 for(name in names(featureSets_specific)) {
     features <- featureSets_specific[[name]]
@@ -283,7 +283,7 @@ for(name in names(featureSets_specific)) {
         }, error = function(e) {
             error_message <- sprintf("An error occurred with gene %s in feature set %s. Continuing with next gene.", gene, name)
             message(error_message)
-            write(error_message, file = Gene_Error_Log_file, append = TRUE)
+            write(error_message, file = Gene_Error_Specific_Log_file, append = TRUE)
         })
     }
     dev.off()
