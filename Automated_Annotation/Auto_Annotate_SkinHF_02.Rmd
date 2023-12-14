@@ -253,20 +253,29 @@ quantcmap <- cmaps_BOR$sunrise
 
 dir.create(paste0(output_directory, "Clustering_02/Specific_CellType_UMAPs"))
 
-for(name in names(featureSets_specific)){
+Gene_Error_Log_file <- paste0(output_directory, "Clustering_02/Specific_CellType_UMAPs/Gene_Error_logging.txt")
+
+for(name in names(featureSets_specific)) {
     features <- featureSets_specific[[name]]
-    pdf(paste0(output_directory,"Clustering_02/Specific_CellType_UMAPs/", name, "_features_UMAP.pdf"))
-    for(gene in features){
-        if(!gene %in% allGenes){
-            message(sprintf("Error: %s is not a valid gene name", gene))
-        }else{
-            umapDF <- data.frame(Embeddings(object = seurat_obj_merged, reduction = "umap"), expr[,gene])        
-            colnames(umapDF) <- c("UMAP1", "UMAP2", gene)
-            # Clip range of expression:
-            upperLim <- quantile(umapDF$gene, probs=c(0.95))
-            umapDF[,gene][umapDF[,gene] >= upperLim] <- upperLim
-            print(plotUMAP(umapDF, dataType = "quantitative", cmap = quantcmap, covarLabel = gene, point_size=pointSize))
-        } 
+    pdf(paste0(output_directory, "Clustering_02/Specific_CellType_UMAPs/", name, "_features_UMAP.pdf"))
+
+    for(gene in features) {
+        tryCatch({
+            if(!gene %in% allGenes) {
+                message(sprintf("Error: %s is not a valid gene name", gene))
+            } else {
+                umapDF <- data.frame(Embeddings(object = seurat_obj_merged, reduction = "umap"), expr[,gene]) 
+                colnames(umapDF) <- c("UMAP1", "UMAP2", gene)
+                # Clip range of expression:
+                upperLim <- quantile(umapDF[,gene], probs=c(0.95))
+                umapDF[,gene][umapDF[,gene] >= upperLim] <- upperLim
+                print(plotUMAP(umapDF, dataType = "quantitative", cmap = quantcmap, covarLabel = gene, point_size=pointSize))
+            }
+        }, error = function(e) {
+            error_message <- sprintf("An error occurred with gene %s in feature set %s. Continuing with next gene.", gene, name)
+            message(error_message)
+            write(error_message, file = Gene_Error_Log_file, append = TRUE)
+        })
     }
     dev.off()
 }
