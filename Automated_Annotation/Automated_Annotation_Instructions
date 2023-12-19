@@ -23,3 +23,5 @@ Type Y in the console and press enter. Packages will be downloaded and installed
 note this can take quite a bit of time. After the virtual environments are set up simply select Run All with the shortcut:
 Control - Alt - R.
 
+After each script is finished running a pop-up will appear and a dedicated output folder
+containing the necessary information to set up parameters for the subsequent script is generated.
