@@ -14,6 +14,8 @@ Automated scRNA analysis and annotation pipelines. Each folder contains an indiv
 
 -Download and install R (4.3.2+): https://www.r-project.org/
 
+-Download and install RTools (4.3+): https://cran.r-project.org/bin/windows/Rtools/
+
 -Download and install RStudio (3.3+): https://posit.co/download/rstudio-desktop/
 
 -Download and install Python (3.12+): https://www.python.org/downloads/
