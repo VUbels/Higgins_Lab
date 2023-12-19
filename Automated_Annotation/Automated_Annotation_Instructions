@@ -1,1 +1,18 @@
+Dedicated instructions to running the Automated_Annotation pipeline:
+
+Ensure all prerequisites are installed:
+
+-Download and install R (4.3.2+): https://www.r-project.org/
+
+-Download and install RStudio (3.3+): https://posit.co/download/rstudio-desktop/
+
+-Download and install Python (3.12+): https://www.python.org/downloads/
+
+For first time users, the annotation pipeline aims to provide a largely autonamous experience with only sparse user input.
+Start by opening the Parameter_File.R, this can be done in a dedicated environment or simply in notepad.
+Each of script SkinHF_01 to SkinHF_05 requires parameters handled in the parameter file.
+Parameters are determined by the user based on the output of the previous script.
+
+In Parameter_File.R first enter the Global Parameters and parameters for Script_01.
+Each parameter is explained within the file and should present no difficulty.
 
