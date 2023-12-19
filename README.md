@@ -10,7 +10,8 @@ Automated scRNA analysis and annotation pipelines. Each folder contains an indiv
 
 -SIGNET pipeline: Infers intracellular communication. Runs a SIGNET pipeline to establish transcriptional network using MLP training model. Requires raw expression matrix as input.
 
-**Important prerequisites:** 
+**Important prerequisites:**
+
 -Download and install R (4.3.2+): https://www.r-project.org/
 
 -Download and install RStudio (3.3+): https://posit.co/download/rstudio-desktop/
