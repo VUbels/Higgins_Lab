@@ -87,9 +87,9 @@ recluster_resolution <- c(0.1, 0.3, 0.6)
 ###########################
 
 #Set clusters to drop based on discrepancy in disease status dimplot results from Script_01. This value is set to 17 only as an
-#example as the dataset used in the example file requires it. If no cluster drop is required set idents_drop to blank 
+#example as the dataset used in the example file requires it. If no cluster drop is comment out idents_drop with #
 
-#idents_drop= c("17")
+#idents_drop <- c("17")
 
 ###########################
 # Parameters for Script_03 
