@@ -32,7 +32,9 @@ knitr::opts_knit$set(root.dir = output_directory)
 ```{r}
 seurat_obj_merged <- readRDS(file = paste0(output_directory, "/Clustering_01/Cluster_01_Seurat_Object.rds"))
 
-seurat_obj_merged <- subset(seurat_obj_merged, idents = idents_drop, invert = TRUE)
+if (exists("idents_drop") && length(idents_drop) > 0) {
+  seurat_obj_merged <- subset(seurat_obj_merged, idents = idents_drop, invert = TRUE)
+}
 
 rawCounts <- GetAssayData(object = seurat_obj_merged, slot = "counts")
 
