@@ -24,7 +24,7 @@ dataset = "Shim"
 
 #The directory containing all raw files, currently only works for datasets comprising barcodes/features/matrix files
 
-directory_mtx = "C:/Users/VictorUPC/Documents/CellChat/Shim_sRNA_dataset/"
+directory_mtx = "C:/Users/VictorUPC/Documents/scRNA_input/Shim_sRNA_dataset/"
 
 #The directory in which all output will be generated
 
