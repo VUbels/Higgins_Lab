@@ -65,11 +65,11 @@ minFeatures = 200
 
 #Sets the minimal RNA features required per cell
 
-NFeaturesRNA = 1000
+NFeaturesRNA = 500
 
 #Sets the minimal mRNA strand count required from each cell
 
-minCounts = 1000
+minCounts = 500
 
 #LSI parameters for initial clustering purposes, these do not require changing
 
