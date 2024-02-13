@@ -26,7 +26,20 @@ for (i in seq_along(subgroups)) {
     subgroup <- subgroups[i]
     plot_genes <- plot_genesList[i]
     plot_genes <- unlist(plot_genes)
-    
+
+    # Construct the file path for the subgroup
+    file_wd <- paste0(output_directory, sprintf("Clustering_03/%s/%s.rds", subgroup, subgroup))
+
+    # Debugging: Print the subgroup being processed and the constructed file path
+    message(sprintf("Processing subgroup: %s", subgroup))
+    message(sprintf("Checking file path: %s", file_wd))
+
+    # Check if the subgroup file exists
+    if (!file.exists(file_wd)) {
+        message(sprintf("File for subgroup '%s' not found. Skipping to the next subgroup.", subgroup))
+        next  # Skip to the next iteration of the loop
+    }
+
     obj <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
     message("Currently processing subgroup ", subgroup[i])
   
@@ -95,6 +108,19 @@ names(FineClustLabels) <- Cells(obj)
 
 for(subgroup in subgroups){
     message(sprintf("Reading in subcluster %s", subgroup))
+
+    # Construct the file path for the subgroup
+    file_wd <- paste0(output_directory, sprintf("Clustering_03/%s/%s.rds", subgroup, subgroup))
+
+    # Debugging: Print the subgroup being processed and the constructed file path
+    message(sprintf("Processing subgroup: %s", subgroup))
+    message(sprintf("Checking file path: %s", file_wd))
+
+    # Check if the subgroup file exists
+    if (!file.exists(file_wd)) {
+        message(sprintf("File for subgroup '%s' not found. Skipping to the next subgroup.", subgroup))
+        next  # Skip to the next iteration of the loop
+    }
 
     # Read in subclustered object
     sub_dir <- paste0(output_directory, "/Clustering_04/", subgroup)
