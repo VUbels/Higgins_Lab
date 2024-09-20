@@ -1,0 +1,659 @@
+---
+title: "Cluster_Script"
+author: "Victor Ubels"
+date: "2023-11-01"
+output: html_document
+---
+
+```{r}
+r_files <- list.files(pattern = "\\.R$", full.names = TRUE)
+
+# Source each file
+for (file in r_files) {
+  source(file)
+}
+
+load_libraries(libraries)
+
+#Set up work directory
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_knit$set(root.dir = output_directory)
+```
+
+```{r}
+pointSize <- 1.0
+useMagic <- TRUE # Should Rmagic be used for data imputation prior to UMAP plotting?
+cmap <- readRDS(paste0(script_directory, '/sample_cmap.rds'))
+
+py_module_available("magic")
+import("magic")
+pymagic <- import('magic')
+```
+
+```{r}
+for (i in seq_along(subgroups)) {
+    
+    subgroup <- subgroups[i]
+    subgroup_tag <- subgroup_tag[i]
+    subClusterGroups_Clust <- subClusterGroups_Cluster[i]
+
+    # Construct the file path for the subgroup
+    file_wd <- paste0(output_directory, sprintf("Clustering_03/%s/%s.rds", subgroup, subgroup))
+
+    # Debugging: Print the subgroup being processed and the constructed file path
+    message(sprintf("Processing subgroup: %s", subgroup))
+    message(sprintf("Checking file path: %s", file_wd))
+
+    # Check if the subgroup file exists
+    if (!file.exists(file_wd)) {
+        message(sprintf("File for subgroup '%s' not found. Skipping to the next subgroup.", subgroup))
+        next  # Skip to the next iteration of the loop
+    }
+    
+    
+    obj <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+    message("Currently processing subgroup ", subgroup[i])
+    allGenes <- rownames(obj)
+
+    
+    
+    # Now, assign cluster names:
+    nclust <- length(unique(obj$Clusters))
+    fineClust <- sapply(1:nclust, function(x) paste0(subClusterGroups_Clust, x))
+    names(fineClust) <- 0:(nclust-1)
+
+    obj$FineClust <- fineClust[obj$Clusters] %>% unname
+    Idents(obj) <- "FineClust"
+    
+    message("Plotting selected marker features on UMAP...")
+
+# Set colormaps
+  qualcmap <- cmaps_BOR$stallion
+  quantcmap <- cmaps_BOR$sunrise
+
+# Get expression data:
+  expr <- GetAssayData(obj, slot = 'data') %>% t()
+  expr <- expr[,Matrix::colSums(expr) > 0] # Remove unexpressed genes
+
+# Markers for identifying broad classes of cells:
+  hla_genes <- grep(pattern = "^HLA-", x = colnames(expr), value = TRUE)
+
+ selectedGenes <- featureSetsList[[i]] %>% unname()
+ selectedGenes <- unlist(selectedGenes)
+ selectedGenes
+ 
+ featureSets <- featureSetsList[[i]]
+ message("running through genes", featureSets)
+ 
+flag <- "noMagic"
+# Smooth with Rmagic
+if(useMagic){
+    message("Using MAGIC to impute (smooth) data for plotting...")
+    # Run MAGIC directly on the expression matrix
+    expr <- magic_alt(expr, genes=selectedGenes, n.jobs = 1, seed = 1)$result
+    flag <- "yesMagic"
+}
+
+    plotDir = paste0(output_directory, 'Clustering_04/', subgroup, '/clustering_qc')
+    dir.create(plotDir, showWarnings = FALSE, recursive = TRUE)
+
+  message("Generating feature UMAPS for ", subgroup)
+  
+for(name in names(featureSets)){
+        tryCatch({
+        features <- featureSets[[name]]
+        pdf(paste0(plotDir,"/", name, "_", subgroups[i], "_features_UMAP.pdf"))
+        for(gene in features){
+            if(!gene %in% allGenes){
+                message(sprintf("Error: %s is not a valid gene name", gene))
+            }else if(!gene %in% colnames(expr)){
+                message(sprintf("Error: %s is not expressed in any of these cells", gene))
+            }else{
+                umapDF <- data.frame(Embeddings(object = obj, reduction = "umap"), expr[,gene])        
+                colnames(umapDF) <- c("UMAP1", "UMAP2", gene)
+                # Clip range of expression:
+                upperLim <- quantile(umapDF[,gene], probs=c(0.95))
+                umapDF[,gene][umapDF[,gene] >= upperLim] <- upperLim
+                print(plotUMAP(umapDF, dataType = "quantitative", cmap = quantcmap, covarLabel = gene, point_size = pointSize))
+                
+            } 
+        }
+        }, error = function(e) {
+        message("Error in plot generation: ", e$message)
+    })
+      dev.off()
+}
+
+saveRDS(obj, file = paste0(output_directory, 'Clustering_03/',subgroup, '/', subgroup, '.rds'))  
+  
+}
+
+sample_cmap <- readRDS(paste0(script_directory, "/sample_cmap.rds"))
+
+for (i in seq_along(subgroups)) {
+    
+    subgroup <- subgroups[i]
+    
+    disease_cmap <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '_disease_cmap.rds'))
+   
+    
+    # Construct the file path for the subgroup
+    file_wd <- paste0(output_directory, sprintf("Clustering_03/%s/%s.rds", subgroup, subgroup))
+
+    # Debugging: Print the subgroup being processed and the constructed file path
+    message(sprintf("Processing subgroup: %s", subgroup))
+    message(sprintf("Checking file path: %s", file_wd))
+
+    # Check if the subgroup file exists
+    if (!file.exists(file_wd)) {
+        message(sprintf("File for subgroup '%s' not found. Skipping to the next subgroup.", subgroup))
+        next  # Skip to the next iteration of the loop
+    }
+    
+    obj <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+    message("Currently processing subgroup ", subgroup)
+    allGenes <- rownames(obj)
+
+# Dot plot of marker Genes:
+  count_mat <- GetAssayData(object = obj, slot = "counts")
+  
+  a <- str(count_mat)
+  b <- class(count_mat)
+  c <- summary(count_mat)
+  avgPctMat <- avgAndPctExpressed(count_mat, obj$FineClust, feature_normalize=TRUE, min_pct=5)
+
+  featureSets <- featureSetsList[[i]]
+  
+# Subset to genes we care about:
+  subGenes <- featureSets %>% do.call("c",.)
+  avgPctMat <- avgPctMat[avgPctMat$feature %in% subGenes,]
+
+# Determine cluster and gene order:
+  wide_df <- unmelt_alt(avgPctMat, row_col="feature", col_col="grp", val_col="avgExpr")
+  wide_df <- prettyOrderMat(wide_df)
+
+  grp_order <- colnames(wide_df$mat)
+  gene_order <- rev(rownames(wide_df$mat))
+  
+  plotDir = paste0(output_directory, 'Clustering_04/', subgroup, '/')
+  
+  dotPlot(avgPctMat, xcol="grp", ycol="feature", color_col="avgExpr", size_col="pctExpr", xorder=grp_order, yorder=gene_order, cmap=cmaps_BOR$sunrise)
+  output_filename <- paste0(plotDir, "/Dotplot_", subgroup, "_cluster_output.png")
+  ggsave(filename = output_filename, width = 15, height = 10, dpi = 1200)
+  
+# Order labels by frequency:
+  fineClust <- obj$FineClust
+  fineclust_cmap <- cmaps_BOR$stallion[1:length(fineClust)]
+  names(fineclust_cmap) <- names(getFreqs(obj$FineClust))
+# Save color palette for 'NamedClust'
+  saveRDS(fineclust_cmap, file = paste0(output_directory, sprintf("/rna_cmap_%s.rds", subgroup)))
+
+### Cluster UMAP ###
+  umapDF <- data.frame(Embeddings(object = obj, reduction = "umap"), obj$FineClust)
+# Randomize cells before plotting UMAP
+  set.seed(1)
+  umapDF <- umapDF[sample(nrow(umapDF)),]
+
+  plotUMAP(umapDF, dataType = "qualitative", cmap = fineclust_cmap, namedColors=FALSE, point_size=pointSize)
+  output_filename <- paste0(output_directory, "/Clustering_04/", subgroup, "/QuantUMAPplot_", subgroup, ".png")
+  ggsave(filename = output_filename, width = 15, height = 10, dpi = 1200)
+  
+   # override previous clustering quality metrics:
+  message("Plotting clustering results...")
+  pointSize <- paramDict[[subgroup]]$pointSize
+  plotClusterQC_subgroup(obj, subgroup = subgroup, plotDir = plotDir, pointSize=pointSize, sampleCmap = sample_cmap, diseaseCmap = disease_cmap)
+  message("Done.")
+  
+  obj <- FindVariableFeatures(obj)
+  obj <- ScaleData(obj)
+  obj <- RunPCA(obj)
+  obj <- BuildClusterTree(object = obj, reduction = "umap", reorder = TRUE)
+  output_filename_svg <- paste0(output_directory, "/Clustering_04/", subgroup, "/ClusTreePlot_", subgroup, ".svg")
+  svg(output_filename_svg)
+  PlotClusterTree(object = obj, slot = 'BuildClusterTree')
+  dev.off()
+  
+}
+
+winDialog("ok", "Script finished running")
+```
+
+```{r}
+### Calculates marker genes for each subgroup.
+for (i in seq_along(subgroups)) {
+    
+    subgroup <- subgroups[i]
+    
+    obj <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+    message("Currently processing subgroup ", subgroup[i])
+  
+    obj <- FindVariableFeatures(obj, nfeatures = 4000)
+    
+    
+    # mitochondrial:
+    mt.genes <- grep(pattern="^MT-", x=allGenes, value=TRUE)
+
+    # Ribosomal:
+    RPS.genes <- grep(pattern = "^RPS", x=allGenes, value = TRUE)
+    RPL.genes <- grep(pattern = "^RPL", x=allGenes, value = TRUE)
+
+    # X/Y chromosome genes:
+    txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+    geneGR <- GenomicFeatures::genes(txdb)
+    sexGenesGR <- geneGR[seqnames(geneGR) %in% c("chrY", "chrX")]
+    matchedGeneSymbols <- select(org.Hs.eg.db,
+                        keys = sexGenesGR$gene_id,
+                        columns = c("ENTREZID", "SYMBOL"),
+                        keytype = "ENTREZID")
+    sexChr.genes <- matchedGeneSymbols$SYMBOL
+
+
+    # Genes to ignore (just for clustering purposes)
+    blacklist.genes <- c(
+        mt.genes,
+        sexChr.genes,
+        s.genes,
+        g2m.genes,
+        RPS.genes,
+        RPL.genes
+)
+
+    var.features <- obj@assays$RNA@var.features
+    var.features <- setdiff(var.features, blacklist.genes)
+    
+    
+    markers <- FindAllMarkers(obj,
+                          logfc.threshold = 0.5,
+                          min.pct = 0.3,
+                          only.pos = TRUE,
+                          test.use = "roc"
+                        )
+
+    unique_markers <- markers %>%
+    group_by(gene) %>%
+    mutate(n_clusters = n(),
+         uniqueness_score = avg_log2FC / n_clusters) %>%
+    ungroup() %>%
+    arrange(cluster, desc(uniqueness_score))
+
+    
+    MarkerTibble <- unique_markers %>%
+    group_by(cluster) %>%
+    top_n(n = 20, wt = uniqueness_score)
+
+    output_filename_markers <- paste0(output_directory, 'Clustering_04/', subgroup, '/', subgroup, '_Markers.xlsx')
+    
+    
+    
+    write_xlsx(MarkerTibble, output_filename_markers)
+}
+
+
+subgroup <- "Epithelial"
+  
+   obj <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+    message("Currently processing subgroup ", subgroup[i])
+  
+  count_mat <- GetAssayData(object = obj, slot = "counts")
+  avgPctMat <- avgAndPctExpressed(count_mat, obj$FineClust, feature_normalize=TRUE, min_pct=5)
+
+# Subset to genes we care about:
+  subGenes <- featureSets_Overview %>% do.call("c",.)
+  avgPctMat <- avgPctMat[avgPctMat$feature %in% subGenes,]
+
+# Threshold min pct
+  avgPctMat$pctExpr[avgPctMat$pctExpr < 5] <- 0
+
+# Determine cluster and gene order:
+  wide_df <- unmelt_alt(avgPctMat, row_col="feature", col_col="grp", val_col="avgExpr")
+
+#wide_df <- prettyOrderMat(wide_df[,rnaOrder], clusterCols=FALSE)
+  wide_df <- prettyOrderMat(wide_df, clusterCols=TRUE)
+
+  grp_order <- colnames(wide_df$mat)
+  gene_order <- rev(rownames(wide_df$mat))
+
+  p <- dotPlot(avgPctMat, xcol="grp", ycol="feature", color_col="avgExpr", size_col="pctExpr", xorder=grp_order, yorder=gene_order, cmap=cmaps_BOR$sunrise)
+  
+  p
+  
+  ggsave(filename = paste0(output_directory, "Clustering_04/Epithelial/DotPlot_Epithelial_Markers.pdf"), plot = p, width = 15, height = 10, dpi = 1200)
+  
+
+```
+
+```{r}
+subgroup <- "Epithelial"
+  
+   obj <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+    message("Currently processing subgroup ", subgroup[i])
+
+Epithelial_markers <- FindAllMarkers(obj,
+                          logfc.threshold = .5,
+                          min.pct = 0.3,
+                          only.pos = TRUE,
+                          test.use = "roc"
+                        )
+
+  unique_markers <- Epithelial_markers %>%
+    group_by(gene) %>%
+    mutate(n_clusters = n(),
+         uniqueness_score = avg_log2FC / n_clusters) %>%
+    ungroup() %>%
+  arrange(cluster, desc(uniqueness_score))
+
+    
+  Epithelial_MarkerTibble <- unique_markers %>%
+    group_by(cluster) %>%
+  top_n(n = 20, wt = uniqueness_score)
+
+Ep3_Ep11_Mark <- FindMarkers(obj, ident.1 = "Ep3", ident.2 = "Ep11", logfc.threshold = 1, min.pct = 0.5, test.use = "roc", min.diff.pct = 0.5)
+
+DimPlot(obj, label = TRUE)
+FeaturePlot(obj, features = c("CD24", "ANGPTL7", "COL11A1", "COMP", "FAU", "DPYSL2", "MTS24", "SCA1", "BLIMP1", "KRT16", "LGR5", "LGR6", "CD200", "FGF14", "FGF18", "DIO2", "TNRC9", "FST", "RIG", "DCN", "SOX5"))
+
+FeaturePlot(obj, features = c("MOXD1", "LRIG1", "SOX9"))
+
+
+```
+
+
+```{r}
+Suprabulbar <- subset(obj, idents = c("Ep1", "Ep5", "Ep7"))
+
+DimPlot(Suprabulbar)
+
+Suprabulbar <- ScaleData(Suprabulbar)
+Suprabulbar <- FindVariableFeatures(Suprabulbar)
+Suprabulbar <- RunPCA(Suprabulbar)
+Suprabulbar <- FindNeighbors(Suprabulbar, dims = 1:15)
+Suprabulbar <- FindClusters(Suprabulbar, resolution = 0.3, method = "igraph", algorithm = 4)
+
+ORS_Mark <- FindAllMarkers(Suprabulbar)
+
+DimPlot(Suprabulbar)
+FeaturePlot(Suprabulbar, features = c("EXT1", "CRYAB", "KRT17", "MAST4"))
+```
+
+```{r}
+ORS_Suprabasal <- subset(obj, idents = c("Ep7"))
+
+DimPlot(ORS_Suprabasal)
+
+ORS_Suprabasal <- ScaleData(ORS_Suprabasal)
+ORS_Suprabasal <- FindVariableFeatures(ORS_Suprabasal)
+ORS_Suprabasal <- RunPCA(ORS_Suprabasal)
+ORS_Suprabasal <- FindNeighbors(ORS_Suprabasal, dims = 1:15)
+ORS_Suprabasal <- FindClusters(ORS_Suprabasal, resolution = 0.3, method = "igraph", algorithm = 4)
+
+ORS_Suprabasal_M <- FindAllMarkers(ORS_Suprabasal, test.use = 'roc', min.pct = .2)
+
+DimPlot(ORS_Suprabasal, label = TRUE)
+FeaturePlot(ORS_Suprabasal, features = c("KRT75"))
+
+new.cluster.ids <- c("Ep7_1", "Ep7_2", "Ep7_2", "Ep7_1")
+names(new.cluster.ids) <- levels(ORS_Suprabasal)
+ORS_Suprabasal <- RenameIdents(ORS_Suprabasal, new.cluster.ids)
+
+DimPlot(ORS_Suprabasal, label = TRUE)
+
+new_idents <- Idents(ORS_Suprabasal)
+common_cells <- intersect(Cells(ORS_Suprabasal), Cells(obj))
+obj <- SetIdent(obj, cells = common_cells, value = new_idents[common_cells])
+DimPlot(obj, label = TRUE)
+```
+
+Only use for subclustering, can change this to any cluster always identify and run next block to reannotate the original obj
+```{r}
+subset_low_ORS <- subset(obj, idents = c("Ep5", "Ep12"))
+subset_low_ORS <- ScaleData(subset_low_ORS)
+subset_low_ORS <- FindVariableFeatures(subset_low_ORS)
+subset_low_ORS <- RunPCA(subset_low_ORS)
+subset_low_ORS <- FindNeighbors(subset_low_ORS, dims = 1:15)
+subset_low_ORS <- FindClusters(subset_low_ORS, resolution = 0.2, method = "igraph", algorithm = 4)
+
+DimPlot(subset_low_ORS)
+
+subset_matrix_M <- FindAllMarkers(subset_matrix, test.use = 'roc', min.pct = .2)
+subset_matrix_Ep5_1 <- FindMarkers(subset_matrix, ident.1 = "1", test.use = 'roc', min.pct = .2, only.pos = TRUE)
+
+FeaturePlot(subset_low_ORS, features = c("KRT6B", "TCHH", "KRT71", "KRT35", "KRT85", "SERPINA3", "KRT17", "KRT25", "KRT27", "KRT28", "TOP2A"))
+
+new.cluster.ids <- c("Ep5_1", "Ep5_2", "Ep12", "Ep5_3")
+names(new.cluster.ids) <- levels(subset_low_ORS)
+subset_low_ORS <- RenameIdents(subset_low_ORS, new.cluster.ids)
+DimPlot(subset_low_ORS)
+
+new_idents <- Idents(subset_low_ORS)
+common_cells <- intersect(Cells(subset_low_ORS), Cells(obj))
+obj <- SetIdent(obj, cells = common_cells, value = new_idents[common_cells])
+DimPlot(obj, label = TRUE)
+```
+
+```{r}
+subset_Epi <- subset(obj, idents = c("Ep8"))
+subset_Epi <- ScaleData(subset_Epi)
+subset_Epi <- FindVariableFeatures(subset_Epi)
+subset_Epi <- RunPCA(subset_Epi)
+subset_Epi <- FindNeighbors(subset_Epi, dims = 1:15)
+subset_Epi <- FindClusters(subset_Epi, resolution = 0.2, method = "igraph", algorithm = 4)
+
+DimPlot(subset_Epi)
+
+FeaturePlot(subset_Epi, feature = "KRTDAP")
+
+new.cluster.ids <- c("Ep8_1", "Ep8_2")
+names(new.cluster.ids) <- levels(subset_Epi)
+subset_Epi <- RenameIdents(subset_Epi, new.cluster.ids)
+DimPlot(subset_Epi)
+
+new_idents <- Idents(subset_Epi)
+common_cells <- intersect(Cells(subset_Epi), Cells(obj))
+obj <- SetIdent(obj, cells = common_cells, value = new_idents[common_cells])
+
+DimPlot(obj, label = TRUE, group.by = "FineClust")
+```
+
+```{r}
+obj$FineClust <- obj@active.ident
+saveRDS(obj, paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+```
+
+```{r}
+subgroup <- "Fibroblasts"
+  
+   obj <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+    message("Currently processing subgroup ", subgroup[i])
+
+Fibroblasts_markers <- FindAllMarkers(obj,
+                          logfc.threshold = 0.5,
+                          min.pct = 0.3,
+                          only.pos = TRUE,
+                          test.use = "roc"
+                        )
+
+  unique_markers <- Fibroblasts_markers %>%
+    group_by(gene) %>%
+    mutate(n_clusters = n(),
+         uniqueness_score = avg_log2FC / n_clusters) %>%
+    ungroup() %>%
+  arrange(cluster, desc(uniqueness_score))
+
+    
+  Fibroblasts_MarkerTibble <- unique_markers %>%
+    group_by(cluster) %>%
+  top_n(n = 20, wt = uniqueness_score)
+
+PFb_1 <- DimPlot(obj)  
+PFb_2 <- MitoCluster_Plot(obj)
+
+DimPlot(obj, label = TRUE)
+FeaturePlot(obj, features = c("SOX5", "COL11A1", "KRT14", "KRT5", "KRT15", "ALPL", "SOX2", "DSM", "ACTA2", "CNN1", "CD34", "CD74", "TM4SF1", "TMSB10", "FGL2", "TAGLN", "DSN", "RGS5"))
+PFb_1 + PFb2
+
+
+obj$FineClust <- obj@active.ident
+saveRDS(obj, paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+```
+
+```{r}
+subgroup <- "Immune"
+  
+   obj <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+    message("Currently processing subgroup ", subgroup[i])
+
+Immune_markers <- FindAllMarkers(obj,
+                          logfc.threshold = 0.3,
+                          min.pct = 0.2,
+                          only.pos = TRUE,
+                          test.use = "roc"
+                        )
+
+  unique_markers <- Immune_markers %>%
+    group_by(gene) %>%
+    mutate(n_clusters = n(),
+         uniqueness_score = avg_log2FC / n_clusters) %>%
+    ungroup() %>%
+  arrange(cluster, desc(uniqueness_score))
+
+    
+  Immune_MarkerTibble <- unique_markers %>%
+    group_by(cluster) %>%
+  top_n(n = 20, wt = uniqueness_score)
+
+DimPlot(obj)  
+
+PIm_1 <- DimPlot(obj)
+PIm_2 <- MitoCluster_Plot(obj)
+
+FeaturePlot(obj, features = c("IL32", "CD4", "CD3D", "HLA-DRA"))
+
+PIm_1+PIm_2
+
+subset_Im <- subset(obj, idents = c("Im1"))
+subset_Im <- ScaleData(subset_Im)
+subset_Im <- FindVariableFeatures(subset_Im)
+subset_Im <- RunPCA(subset_Im)
+subset_Im <- FindNeighbors(subset_Im, dims = 1:15)
+subset_Im <- FindClusters(subset_Im, resolution = 0.2, method = "igraph", algorithm = 4)
+
+DimPlot(subset_Im)
+
+new.cluster.ids <- c("Im1_1", "Im1_2")
+names(new.cluster.ids) <- levels(subset_Im)
+subset_Im <- RenameIdents(subset_Im, new.cluster.ids)
+DimPlot(subset_Im)
+
+new_idents <- Idents(subset_Im)
+common_cells <- intersect(Cells(subset_Im), Cells(obj))
+obj <- SetIdent(obj, cells = common_cells, value = new_idents[common_cells])
+
+DimPlot(obj, label = TRUE)
+
+obj$FineClust <- obj@active.ident
+saveRDS(obj, paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+```
+
+```{r}
+subgroup <- "Endothelial"
+  
+   obj <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+    message("Currently processing subgroup ", subgroup[i])
+
+endothelial_markers <- FindAllMarkers(obj,
+                          logfc.threshold = 0.25,
+                          min.pct = 0.2,
+                          only.pos = TRUE,
+                          test.use = "roc"
+                        )
+
+  unique_markers <- endothelial_markers %>%
+    group_by(gene) %>%
+    mutate(n_clusters = n(),
+         uniqueness_score = avg_log2FC / n_clusters) %>%
+    ungroup() %>%
+  arrange(cluster, desc(uniqueness_score))
+
+    
+  MarkerTibble <- unique_markers %>%
+    group_by(cluster) %>%
+  top_n(n = 20, wt = uniqueness_score)
+  
+PEd_1 <- DimPlot(obj)
+PEd_2 <- MitoCluster_Plot(obj)
+
+PEd_1+PEd_2
+
+DimPlot(obj, label = TRUE)
+FeaturePlot(obj, features = "ICAM1")
+
+saveRDS(obj, paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+```
+
+```{r}
+subgroup <- "Other"
+  
+   obj <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+    message("Currently processing subgroup ", subgroup[i])
+
+Other_markers <- FindAllMarkers(obj,
+                          logfc.threshold = 0.5,
+                          min.pct = 0.3,
+                          only.pos = TRUE,
+                          test.use = "roc"
+                        )
+
+  unique_markers <- Other_markers %>%
+    group_by(gene) %>%
+    mutate(n_clusters = n(),
+         uniqueness_score = avg_log2FC / n_clusters) %>%
+    ungroup() %>%
+  arrange(cluster, desc(uniqueness_score))
+
+    
+  Other_MarkerTibble <- unique_markers %>%
+    group_by(cluster) %>%
+  top_n(n = 20, wt = uniqueness_score)
+
+PO_1 <- DimPlot(obj)
+PO_2 <- MitoCluster_Plot(obj)
+
+PO_1+PO_2
+
+DimPlot(obj, label =TRUE)
+
+FeaturePlot(obj, features = c("MLANA", "AQP5"))
+
+saveRDS(obj, paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+```
+
+```{r}
+library(SeuratDisk)
+library(Matrix)
+
+counts_data <- GetAssayData(seurat_obj_merged, slot = "counts")
+counts_epithelial <- GetAssayData(obj, slot = "counts")
+
+writeMM(counts_data, paste0(output_directory, "/Clustering_03/", "counts_merged.mtx"))
+writeMM(counts_epithelial, paste0(output_directory, "/Clustering_03/", "counts_epithelial.mtx"))
+
+
+metadata_merged <- seurat_obj_merged@meta.data
+write.csv(metadata_merged, paste0(output_directory, "/Clustering_03/", "metadata_merged.csv"))
+
+metadata_epithelial <- obj@meta.data
+write.csv(metadata_epithelial, paste0(output_directory, "/Clustering_03/", "metadata_epithelial.csv"))
+
+umap_coords_merged <- Embeddings(seurat_obj_merged, reduction = "umap")
+write.csv(umap_coords_merged, paste0(output_directory, "/Clustering_03/","umap_coords_merged.csv"))
+
+umap_coords_epithelial <- Embeddings(obj, reduction = "umap")
+write.csv(umap_coords_epithelial, paste0(output_directory, "/Clustering_03/","umap_coords_epithelial.csv"))
+
+gene_names_merged <- rownames(seurat_obj_merged)
+writeLines(gene_names_merged, paste0(output_directory, "/Clustering_03/","gene_names_merged.txt"))
+
+gene_names_epithelial <- rownames(obj)
+writeLines(gene_names_epithelial, paste0(output_directory, "/Clustering_03/","gene_names_epithelial.txt"))
+```
+

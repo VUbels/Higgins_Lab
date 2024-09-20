@@ -1,0 +1,599 @@
+---
+title: "Auto_Annotate_SkinHF_05.Rmd"
+author: "Victor Ubels"
+date: "2023-12-06"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r}
+r_files <- list.files(pattern = "\\.R$", full.names = TRUE)
+
+# Source each file
+for (file in r_files) {
+  source(file)
+}
+
+load_libraries(libraries)
+```
+
+```{r}
+dir.create(paste0(output_directory, "Clustering_04"))
+
+pointSize <- 1.5
+
+for (i in seq_along(subgroups)) {
+    
+    subgroup <- subgroups[i]
+    plot_genes <- plot_genesList[i]
+    plot_genes <- unlist(plot_genes)
+    
+    
+    obj <- readRDS(paste0(output_directory, 'Clustering_03/', subgroup, '/', subgroup, '.rds'))
+    message("Currently processing subgroup ", subgroup[i])
+    
+    obj@meta.data$FineClust <- as.character(obj@meta.data$FineClust)
+    
+obj$cell_type <- sapply(obj@meta.data$FineClust, function(x) {
+  cat("FineClust value:", x, "\n") # To see what FineClust value is being processed
+  if (is.null(subCluster_Annotation[[x]])) {
+    cat("No match found for:", x, "\n")
+    return(NA) # or "Unknown" or any other placeholder you wish to use for non-mapped keys
+  } else {
+    cat("Match found:", subCluster_Annotation[[x]], "\n")
+    return(subCluster_Annotation[[x]])
+  }
+})
+
+   unique(obj$cell_type)
+
+# Dot plot of marker Genes:
+count_mat <- GetAssayData(object=obj, slot="counts")
+
+A <- any(is.na(obj$cell_type))
+
+avgPctMat <- avgAndPctExpressed(count_mat, obj$cell_type, feature_normalize=TRUE, min_pct=5)
+
+# Subset to genes we care about:
+avgPctMat <- avgPctMat[avgPctMat$feature %in% plot_genes,]
+
+# Determine cluster and gene order:
+wide_df <- unmelt_alt(avgPctMat, row_col="feature", col_col="grp", val_col="avgExpr")
+wide_df <- prettyOrderMat(wide_df)
+
+# Threshold min pct
+avgPctMat$pctExpr[avgPctMat$pctExpr < 5] <- 0
+
+grp_order <- colnames(wide_df$mat)
+gene_order <- rev(rownames(wide_df$mat))
+
+plotDir = paste0(output_directory, 'Clustering_04/', subgroup, '/')  
+# 
+dotPlot(avgPctMat, xcol="grp", ycol="feature", color_col="avgExpr", size_col="pctExpr",
+xorder=grp_order, yorder=gene_order, cmap=cmaps_BOR$sunrise, aspectRatio=1.6)
+output_filename <- paste0(plotDir, "/Dotplot_TrueMarker_", subgroup, "_cluster_output.png")
+ggsave(filename = output_filename, width = 15, height = 10, dpi = 1200)
+
+obj <- SetIdent(obj, value = obj@meta.data$cell_type)
+
+fineclust_cmap <- cmaps_BOR$stallion[1:length(subCluster_Annotation)]
+names(fineclust_cmap) <- names(getFreqs(obj$FineClust))
+
+label_cmap <- fineclust_cmap
+names(label_cmap) <- unlist(subCluster_Annotation)[names(label_cmap)]
+umapDF <- data.frame(Embeddings(object = obj, reduction = "umap"), unlist(subCluster_Annotation)[obj$FineClust])
+  # Randomize cells before plotting UMAP
+set.seed(1)
+umapDF <- umapDF[sample(nrow(umapDF)),]
+
+plotDir = paste0(output_directory, 'Clustering_04/', subgroup, '/')
+
+pdf(paste0(plotDir, "/LabeledClust_UMAP.pdf"), width=10, height=10)
+print(plotUMAP(umapDF, dataType = "qualitative", cmap = label_cmap, namedColors=TRUE,   point_size=pointSize))
+
+dev.off()
+
+
+#Save object with manual fully assigned labelling
+saveRDS(obj, file = paste0(output_directory, 'Clustering_04/',subgroup, '/', subgroup, '.rds'))
+
+}
+
+obj <- readRDS(paste0(output_directory, 'Clustering_03/Broad_Annotated_Skin.rds'))
+
+FineClustLabels <- obj$NamedClust
+names(FineClustLabels) <- Cells(obj)
+
+for(subgroup in subgroups){
+    message(sprintf("Reading in subcluster %s", subgroup))
+
+    # Read in subclustered object
+    sub_dir <- paste0(output_directory, "/Clustering_04/", subgroup)
+    sub_obj <- readRDS(paste0(sub_dir, sprintf('/%s.rds', subgroup)))
+
+    # Add Manual labels to full Seurat object
+    FineClustLabels[Cells(sub_obj)] <- sub_obj$cell_type
+}
+
+obj$FineClust <- FineClustLabels[Cells(obj)]
+
+unique(obj$FineClust)
+
+BigClust_label <- function(obj, BigCluster_Annotation) {
+  fine_clust <- obj$FineClust
+  
+  big_clust <- sapply(fine_clust, function(x) {
+    if (x %in% names(BigCluster_Annotation)) {
+      return(BigCluster_Annotation[[x]][1])  # Return the first matching value
+    } else {
+      return(NA)
+    }
+  })
+  
+  obj$BigClust <- big_clust
+  
+  return(obj)
+}
+
+obj <- BigClust_label(obj, BigCluster_Annotation)
+
+unique(obj$BigClust)
+
+### FineCluster UMAP ###
+umapDF <- data.frame(Embeddings(object = obj, reduction = "umap"), obj$FineClust)
+# Randomize cells before plotting
+set.seed(1)
+umapDF <- umapDF[sample(nrow(umapDF)),]
+
+pointSize <- 0.05
+plotUMAP_Labels(umapDF, dataType="qualitative", cmap=cmaps_BOR$stallion, point_size=pointSize)
+output_filename <- paste0(output_directory, "/Clustering_04/Complete_Annotated_", project_name ,"_DimPlot_Label.png")
+ggsave(filename = output_filename, width = 15, height = 10, dpi = 1200)
+
+umapDF_Big <- data.frame(Embeddings(object = obj, reduction = "umap"), obj$BigClust)
+# Randomize cells before plotting
+set.seed(1)
+umapDF_Big <- umapDF_Big[sample(nrow(umapDF_Big)),]
+
+plotUMAP_Labels(umapDF_Big, dataType="qualitative", cmap=cmaps_BOR$stallion, point_size=pointSize)
+output_filename <- paste0(output_directory, "/Clustering_04/Big_Annotated_", project_name ,"_DimPlot_Label.png")
+ggsave(filename = output_filename, width = 15, height = 10, dpi = 1200)
+
+DimPlot(obj, group.by = "FineClust")
+
+# Save cluster cell numbers
+output_filename <- paste0(output_directory, "/Cell_Number_", project_name ,"_Overview.txt")
+
+cell_type_counts <- table(obj@meta.data$FineClust)
+cell_type_counts_df <- as.data.frame(cell_type_counts)
+write.table(cell_type_counts_df, file = output_filename, sep = "\t", row.names =TRUE, quote = FALSE)
+
+# Save whole project with all cluster information:
+output_filename <- paste0(output_directory, "/Complete_Annotated_", project_name ,"_Object.rds")
+
+saveRDS(obj, output_filename)
+
+winDialog("ok", "Script finished running")
+```
+
+```{r}
+point_size = 0.05
+
+plotUMAP_Labels_columns(umapDF, dataType="qualitative", cmap=cmaps_BOR$stallion, point_size = point_size)
+output_filename <- paste0(output_directory, "/Clustering_04/Complete_Annotated_", project_name ,"_DimPlot_Label_Columns.png")
+ggsave(file = output_filename, width = 8, height = 5)
+
+plotUMAP_Labels_columns(umapDF_Big, dataType="qualitative", cmap=cmaps_BOR$stallion, point_size = point_size)
+output_filename <- paste0(output_directory, "/Clustering_04/Big_Annotated_", project_name ,"_DimPlot_Label_Columns.png")
+ggsave(file = output_filename, width = 8, height = 5)
+```
+
+```{r}
+library(Seurat)
+library(openxlsx)
+
+# Load the Full_data Seurat object
+obj <- readRDS(paste0(output_directory, "/Complete_Annotated_", project_name ,"_Object.rds"))
+
+full_data$FineClust <- as.factor(full_data$FineClust)
+Idents(full_data) <- full_data$FineClust
+
+full_data_clusters <- unique(full_data$FineClust)
+
+# Create a new workbook to hold all subgroups and additional results
+wb <- createWorkbook()
+
+for (subgroup in subgroups) {
+    
+    # Load the corresponding Seurat object
+    obj <- readRDS(paste0(output_directory, 'Clustering_04/', subgroup, '/', subgroup, '.rds'))
+    
+    # Notify which subgroup is currently being processed
+    message("Currently processing subgroup ", subgroup)
+    
+    # Set the active identity class to 'cell_type'
+    Idents(obj) <- obj$cell_type
+    
+    # Extract the unique clusters (cell types) from the Seurat object
+    clusters <- unique(Idents(obj))
+    
+    # Create a new sheet for FindMarkers results
+    sheet_name_find_markers <- paste0(subgroup, "_FindMarkers")
+    addWorksheet(wb, sheetName = sheet_name_find_markers)
+    
+    # Track the starting column index for writing data
+    start_col <- 1
+    
+    for (cluster1 in clusters) {
+        
+        # Define ident.2 as all clusters except cluster1
+        other_clusters <- clusters[clusters != cluster1]
+        
+        tryCatch({
+            markers <- FindMarkers(
+                object = obj,
+                ident.1 = cluster1,
+                ident.2 = other_clusters,
+                min.pct = 0.3,        # Adjust as needed
+                logfc.threshold = 0.5, # Adjust as needed
+                test.use = 'roc'
+            )
+            
+            # Check if markers are found
+            if (nrow(markers) > 0) {
+                
+                # Sort by AUC
+                if ("auc" %in% colnames(markers)) {
+                    markers <- markers[order(markers$auc, decreasing = TRUE), ]
+                }
+                
+                # Add a column to the results indicating the comparison
+                markers$comparison <- paste0(cluster1, "_vs_", subgroup)
+                
+                # Extract the gene names from the rownames
+                rownames(markers) <- sapply(strsplit(rownames(markers), "\\."), function(x) tail(x, 1))
+                
+                # Write the data to the worksheet
+                writeData(wb, sheet = sheet_name_find_markers, markers, startCol = start_col, rowNames = TRUE, colNames = TRUE)
+                
+                # Update the starting column index for the next result, leaving an empty column in between
+                start_col <- start_col + ncol(markers) + 2
+            } else {
+                message("No markers found for ", cluster1)
+            }
+            
+        }, error = function(e) {
+            message("Error processing ", cluster1, ": ", e$message)
+        })
+    }
+    
+    # Create a new sheet for FindAllMarkers results
+    sheet_name_find_all_markers <- paste0(subgroup, "_FindAllMarkers")
+    addWorksheet(wb, sheetName = sheet_name_find_all_markers)
+    
+    start_col_all_markers <- 1
+    
+    for (cluster1 in clusters) {
+        
+        # Define ident.2 as all clusters in Full_data except the current cluster
+        other_clusters_full_data <- full_data_clusters[full_data_clusters != cluster1]
+        
+        tryCatch({
+            markers_full_data <- FindMarkers(
+                object = full_data,
+                ident.1 = cluster1,
+                ident.2 = other_clusters_full_data,
+                min.pct = 0.3,        # Adjust as needed
+                logfc.threshold = 0.5, # Adjust as needed
+                test.use = 'roc'
+            )
+            
+            # Check if markers are found
+            if (nrow(markers_full_data) > 0) {
+                
+                # Sort by AUC
+                if ("auc" %in% colnames(markers_full_data)) {
+                    markers_full_data <- markers_full_data[order(markers_full_data$auc, decreasing = TRUE),]
+                }
+                
+                # Add a column to the results indicating the comparison
+                markers_full_data$comparison <- paste0(cluster1, "_vs_", "All")
+                
+                # Extract the gene names from the rownames
+                rownames(markers_full_data) <- sapply(strsplit(rownames(markers_full_data), "\\."), function(x) tail(x, 1))
+                
+                # Write the Full_data results to the sheet
+                writeData(wb, sheet = sheet_name_find_all_markers, markers_full_data, startCol = start_col_all_markers, rowNames = TRUE, colNames = TRUE)
+                
+                # Update the starting column index for the next result
+                start_col_all_markers <- start_col_all_markers + ncol(markers_full_data) + 2
+            } else {
+                message("No markers found for ", cluster1, " in Full_data")
+            }
+            
+        }, error = function(e) {
+            message("Error processing ", cluster1, " in Full_data: ", e$message)
+        })
+    }
+}
+
+# Save the workbook with all subgroups and additional results
+output_file <- paste0(output_directory, paste0(dataset, "_Complete_Markers.xlsx"))
+saveWorkbook(wb, file = output_file, overwrite = TRUE)
+
+
+```
+
+```{r}
+
+project_name <- "Ubels_2024_Anagen"
+dataset <- "Ubels_2024_Anagen"
+
+output_directory_base = "D:/scRNA_Ubels_2024_Output/Anagen"
+output_directory = paste0(output_directory_base, "/", project_name,"/")
+  
+# Load the Full_data Seurat object
+full_data <- readRDS(paste0(output_directory, "Complete_Annotated_", project_name ,"_Object.rds"))
+
+full_data$FineClust <- as.factor(full_data$FineClust)
+Idents(full_data) <- full_data$FineClust
+
+full_data_clusters <- unique(full_data$FineClust)
+
+# Create a new workbook to hold all subgroups and additional results
+wb <- createWorkbook()
+
+for (subgroup in subgroups) {
+    
+    # Load the corresponding Seurat object
+    obj <- readRDS(paste0(output_directory, 'Clustering_04/', subgroup, '/', subgroup, '.rds'))
+    
+    # Notify which subgroup is currently being processed
+    message("Currently processing subgroup ", subgroup)
+    
+    # Set the active identity class to 'cell_type'
+    Idents(obj) <- obj$cell_type
+    
+    # Extract the unique clusters (cell types) from the Seurat object
+    clusters <- unique(Idents(obj))
+    
+    # Create a new sheet for FindMarkers results
+    sheet_name_find_markers <- paste0(subgroup, "_FindMarkers")
+    addWorksheet(wb, sheetName = sheet_name_find_markers)
+    
+    # Track the starting column index for writing data
+    start_col <- 1
+    
+    for (cluster1 in clusters) {
+        
+        # Define ident.2 as all clusters except cluster1
+        other_clusters <- clusters[clusters != cluster1]
+        
+        tryCatch({
+            markers <- FindMarkers(
+                object = obj,
+                ident.1 = cluster1,
+                ident.2 = other_clusters,
+                min.pct = 0.3,        # Adjust as needed
+                logfc.threshold = 0.5, # Adjust as needed
+                test.use = 'roc'
+            )
+            
+            # Check if markers are found
+            if (nrow(markers) > 0) {
+                
+                # Sort by AUC
+                if ("auc" %in% colnames(markers)) {
+                    markers <- markers[order(markers$auc, decreasing = TRUE), ]
+                }
+                
+                # Add a column to the results indicating the comparison
+                markers$comparison <- paste0(cluster1, "_vs_", subgroup)
+                
+                # Extract the gene names from the rownames
+                rownames(markers) <- sapply(strsplit(rownames(markers), "\\."), function(x) tail(x, 1))
+                
+                # Write the data to the worksheet
+                writeData(wb, sheet = sheet_name_find_markers, markers, startCol = start_col, rowNames = TRUE, colNames = TRUE)
+                
+                # Update the starting column index for the next result, leaving an empty column in between
+                start_col <- start_col + ncol(markers) + 2
+            } else {
+                message("No markers found for ", cluster1)
+            }
+            
+        }, error = function(e) {
+            message("Error processing ", cluster1, ": ", e$message)
+        })
+    }
+    
+    # Create a new sheet for FindAllMarkers results
+    sheet_name_find_all_markers <- paste0(subgroup, "_FindAllMarkers")
+    addWorksheet(wb, sheetName = sheet_name_find_all_markers)
+    
+    start_col_all_markers <- 1
+    
+    for (cluster1 in clusters) {
+        
+        # Define ident.2 as all clusters in Full_data except the current cluster
+        other_clusters_full_data <- full_data_clusters[full_data_clusters != cluster1]
+        
+        tryCatch({
+            markers_full_data <- FindMarkers(
+                object = full_data,
+                ident.1 = cluster1,
+                ident.2 = other_clusters_full_data,
+                min.pct = 0.3,        # Adjust as needed
+                logfc.threshold = 0.5, # Adjust as needed
+                test.use = 'roc'
+            )
+            
+            # Check if markers are found
+            if (nrow(markers_full_data) > 0) {
+                
+                # Sort by AUC
+                if ("auc" %in% colnames(markers_full_data)) {
+                    markers_full_data <- markers_full_data[order(markers_full_data$auc, decreasing = TRUE),]
+                }
+                
+                # Add a column to the results indicating the comparison
+                markers_full_data$comparison <- paste0(cluster1, "_vs_", "All")
+                
+                # Extract the gene names from the rownames
+                rownames(markers_full_data) <- sapply(strsplit(rownames(markers_full_data), "\\."), function(x) tail(x, 1))
+                
+                # Write the Full_data results to the sheet
+                writeData(wb, sheet = sheet_name_find_all_markers, markers_full_data, startCol = start_col_all_markers, rowNames = TRUE, colNames = TRUE)
+                
+                # Update the starting column index for the next result
+                start_col_all_markers <- start_col_all_markers + ncol(markers_full_data) + 2
+            } else {
+                message("No markers found for ", cluster1, " in Full_data")
+            }
+            
+        }, error = function(e) {
+            message("Error processing ", cluster1, " in Full_data: ", e$message)
+        })
+    }
+}
+
+# Save the workbook with all subgroups and additional results
+output_file <- paste0(output_directory, paste0(dataset, "_Complete_Markers.xlsx"))
+saveWorkbook(wb, file = output_file, overwrite = TRUE)
+
+```
+
+```{r}
+
+project_name <- "Ubels_2024_Catagen"
+dataset <- "Ubels_2024_Catagen"
+
+output_directory_base = "D:/scRNA_Ubels_2024_Output/Catagen"
+output_directory = paste0(output_directory_base, "/", project_name,"/")
+
+# Load the Full_data Seurat object
+full_data <- readRDS(paste0(output_directory, "Complete_Annotated_", project_name ,"_Object.rds"))
+
+# Create a new workbook to hold all subgroups and additional results
+wb <- createWorkbook()
+
+for (subgroup in subgroups) {
+    
+    # Load the corresponding Seurat object
+    obj <- readRDS(paste0(output_directory, 'Clustering_04/', subgroup, '/', subgroup, '.rds'))
+    
+    # Notify which subgroup is currently being processed
+    message("Currently processing subgroup ", subgroup)
+    
+    # Set the active identity class to 'cell_type'
+    Idents(obj) <- obj$cell_type
+    
+    # Extract the unique clusters (cell types) from the Seurat object
+    clusters <- unique(Idents(obj))
+    
+    # Create a new sheet for FindMarkers results
+    sheet_name_find_markers <- paste0(subgroup, "_FindMarkers")
+    addWorksheet(wb, sheetName = sheet_name_find_markers)
+    
+    # Track the starting column index for writing data
+    start_col <- 1
+    
+    for (cluster1 in clusters) {
+        
+        # Define ident.2 as all clusters except cluster1
+        other_clusters <- clusters[clusters != cluster1]
+        
+        tryCatch({
+            markers <- FindMarkers(
+                object = obj,
+                ident.1 = cluster1,
+                ident.2 = other_clusters,
+                min.pct = 0.3,        # Adjust as needed
+                logfc.threshold = 0.5, # Adjust as needed
+                test.use = 'roc'
+            )
+            
+            # Check if markers are found
+            if (nrow(markers) > 0) {
+                
+                # Sort by AUC
+                if ("auc" %in% colnames(markers)) {
+                    markers <- markers[order(markers$auc, decreasing = TRUE), ]
+                }
+                
+                # Add a column to the results indicating the comparison
+                markers$comparison <- paste0(cluster1, "_vs_", subgroup)
+                
+                # Extract the gene names from the rownames
+                rownames(markers) <- sapply(strsplit(rownames(markers), "\\."), function(x) tail(x, 1))
+                
+                # Write the data to the worksheet
+                writeData(wb, sheet = sheet_name_find_markers, markers, startCol = start_col, rowNames = TRUE, colNames = TRUE)
+                
+                # Update the starting column index for the next result, leaving an empty column in between
+                start_col <- start_col + ncol(markers) + 2
+            } else {
+                message("No markers found for ", cluster1)
+            }
+            
+        }, error = function(e) {
+            message("Error processing ", cluster1, ": ", e$message)
+        })
+    }
+    
+    # Create a new sheet for FindAllMarkers results
+    sheet_name_find_all_markers <- paste0(subgroup, "_FindAllMarkers")
+    addWorksheet(wb, sheetName = sheet_name_find_all_markers)
+    
+    start_col_all_markers <- 1
+    
+    for (cluster1 in clusters) {
+        
+        # Define ident.2 as all clusters in Full_data except the current cluster
+        other_clusters_full_data <- full_data_clusters[full_data_clusters != cluster1]
+        
+        tryCatch({
+            markers_full_data <- FindMarkers(
+                object = full_data,
+                ident.1 = cluster1,
+                ident.2 = other_clusters_full_data,
+                min.pct = 0.3,        # Adjust as needed
+                logfc.threshold = 0.5, # Adjust as needed
+                test.use = 'roc'
+            )
+            
+            # Check if markers are found
+            if (nrow(markers_full_data) > 0) {
+                
+                # Sort by AUC
+                if ("auc" %in% colnames(markers_full_data)) {
+                    markers_full_data <- markers_full_data[order(markers_full_data$auc, decreasing = TRUE),]
+                }
+                
+                # Add a column to the results indicating the comparison
+                markers_full_data$comparison <- paste0(cluster1, "_vs_", "All")
+                
+                # Extract the gene names from the rownames
+                rownames(markers_full_data) <- sapply(strsplit(rownames(markers_full_data), "\\."), function(x) tail(x, 1))
+                
+                # Write the Full_data results to the sheet
+                writeData(wb, sheet = sheet_name_find_all_markers, markers_full_data, startCol = start_col_all_markers, rowNames = TRUE, colNames = TRUE)
+                
+                # Update the starting column index for the next result
+                start_col_all_markers <- start_col_all_markers + ncol(markers_full_data) + 2
+            } else {
+                message("No markers found for ", cluster1, " in Full_data")
+            }
+            
+        }, error = function(e) {
+            message("Error processing ", cluster1, " in Full_data: ", e$message)
+        })
+    }
+}
+
+# Save the workbook with all subgroups and additional results
+output_file <- paste0(output_directory, paste0(dataset, "_Complete_Markers.xlsx"))
+saveWorkbook(wb, file = output_file, overwrite = TRUE)
+
+```
