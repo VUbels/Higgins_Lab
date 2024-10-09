@@ -64,7 +64,7 @@ message("All files read")
 Pre-processing data before doublet and ambient RNA removal
 ```{r}
 # Retrieve all objects in the global environment that match the pattern "PATTERN"
-seurat.objects_names <- ls(envir = .GlobalEnv, pattern = pattern_files)
+seurat.objects_names <- pattern_files
 
 # Get the actual Seurat objects based on the names
 seurat.objects <- mget(seurat.objects_names, envir = .GlobalEnv)
