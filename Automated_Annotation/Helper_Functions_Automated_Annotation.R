@@ -19,16 +19,18 @@ load_libraries <- function(libraries) {
 # Automated pre-processing functions for mtx
 ############################################
 
-read_all_mtx_and_create_seurat <- function(directory) {
-  # List all files in the directory
-  files <- list.files(directory, full.names = TRUE)
+read_all_mtx_and_create_seurat <- <- function(directory) {
+  # Initialize a vector to store Seurat object names
+  pattern_files <- c()
   
-  # Find base names without extensions
-  base_names <- unique(sapply(strsplit(basename(files), "_matrix.mtx.gz|_features.tsv.gz|_barcodes.tsv.gz"), `[`, 1))
+  # List all files in the main directory (non-recursive)
+  main_files <- list.files(directory, pattern = "(_matrix.mtx.gz|_features.tsv.gz|_barcodes.tsv.gz)$", full.names = TRUE, recursive = FALSE)
   
-  # Process each dataset
-  for (base in base_names) {
-    # Construct the file names
+  # Find base names for files in the main directory
+  main_base_names <- unique(sapply(strsplit(basename(main_files), "_matrix.mtx.gz|_features.tsv.gz|_barcodes.tsv.gz"), `[`, 1))
+  
+  # Process datasets in the main directory
+  for (base in main_base_names) {
     mtx_file <- file.path(directory, paste0(base, "_matrix.mtx.gz"))
     features_file <- file.path(directory, paste0(base, "_features.tsv.gz"))
     cells_file <- file.path(directory, paste0(base, "_barcodes.tsv.gz"))
@@ -38,20 +40,63 @@ read_all_mtx_and_create_seurat <- function(directory) {
       # Read the matrix
       expression_matrix <- ReadMtx(mtx = mtx_file, features = features_file, cells = cells_file)
       
-      # Create a Seurat object; you might want to add additional parameters based on your specific data and analysis needs
+      # Create a Seurat object
       seurat_object <- CreateSeuratObject(counts = expression_matrix, min.cells = 0, min.features = minFeatures)
       seurat_object[["percent.mt"]] <- PercentageFeatureSet(seurat_object, pattern = "^MT-")
       seurat_object <- subset(seurat_object, subset = nFeature_RNA > minFeatures & percent.mt < Mito_Cutoff & nCount_RNA > minCounts)
       
-      # Assign the Seurat object to a new variable in the global environment
-      # Here, we keep the original base name for the Seurat object as well
-      assign(paste0(base), seurat_object, envir = .GlobalEnv)
+      # Assign the Seurat object to a new variable with the base name
+      assign(base, seurat_object, envir = .GlobalEnv)
       
+      # Add the base name to pattern_files vector
+      pattern_files <- c(pattern_files, base)
     } else {
       warning(paste("Files for dataset", base, "not found. Skipping."))
     }
   }
+
+  # Now handle subdirectories
+  subdirs <- list.dirs(directory, recursive = FALSE, full.names = TRUE)
+  
+  for (subdir in subdirs) {
+    # List files in the subdirectory
+    subdir_files <- list.files(subdir, pattern = "(matrix.mtx.gz|features.tsv.gz|barcodes.tsv.gz)$", full.names = TRUE, recursive = FALSE)
+    
+    # Subfolder name (basename of the subdir)
+    subdir_name <- basename(subdir)
+    
+    # Construct the file paths for matrix, features, and barcodes
+    mtx_file <- file.path(subdir, "matrix.mtx.gz")
+    features_file <- file.path(subdir, "features.tsv.gz")
+    cells_file <- file.path(subdir, "barcodes.tsv.gz")
+    
+    # Check if all files exist in the subdirectory
+    if (file.exists(mtx_file) && file.exists(features_file) && file.exists(cells_file)) {
+      # Read the matrix
+      expression_matrix <- ReadMtx(mtx = mtx_file, features = features_file, cells = cells_file)
+      
+      # Create a Seurat object
+      seurat_object <- CreateSeuratObject(counts = expression_matrix, min.cells = 0, min.features = minFeatures)
+      seurat_object[["percent.mt"]] <- PercentageFeatureSet(seurat_object, pattern = "^MT-")
+      seurat_object <- subset(seurat_object, subset = nFeature_RNA > minFeatures & percent.mt < Mito_Cutoff & nCount_RNA > minCounts)
+      
+      # Assign the Seurat object to a new variable with the subfolder name
+      assign(subdir_name, seurat_object, envir = .GlobalEnv)
+      
+      # Add the subfolder name to pattern_files vector
+      pattern_files <- c(pattern_files, subdir_name)
+    } else {
+      warning(paste("Files for dataset in subdirectory", subdir_name, "not found or incomplete. Skipping."))
+    }
+  }
+  
+  # Assign pattern_files to global environment
+  assign("pattern_files", pattern_files, envir = .GlobalEnv)
+  
+  # Return the vector of Seurat object names
+  return(pattern_files)
 }
+
 
 Process_Seurat <- function(obj) {
   obj <- NormalizeData(obj)
