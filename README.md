@@ -20,7 +20,7 @@ Automated scRNA analysis and annotation pipelines. Each folder contains an indiv
 
 -Download and install RStudio (3.3+): https://posit.co/download/rstudio-desktop/
 
--Download and install Python (3.12+): https://www.python.org/downloads/
+-Download and install Python (3.11+): https://www.python.org/downloads/
 
 -Download and install Microsoft C++ Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
 
