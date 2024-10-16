@@ -1,0 +1,82 @@
+###POWERSHELL###
+wsl --install -d Ubuntu
+
+###UBUNTU/DEBIAN###
+
+#Install and manage multiple R versions
+sudo apt update
+sudo apt install -y curl
+
+curl -Ls https://github.com/r-lib/rig/releases/download/latest/rig-linux-latest.tar.gz | sudo tar xz -C /usr/local
+
+rig add 4.3.3
+
+#Install RStudio and RstudioServer
+
+sudo apt update && sudo apt upgrade -y
+sudo apt install gdebi-core
+
+>This changes based on which version of RstudioServer you want to run
+>https://posit.co/download/rstudio-server and select Ubuntu (Im using Ubuntu24.04)
+
+wget https://download2.rstudio.org/server/jammy/amd64/rstudio-server-2024.09.0-375-amd64.deb
+sudo gdebi rstudio-server-2024.09.0-375-amd64.deb
+
+>You can access your RstudioServer with
+sudo rstudio-server start
+
+>By default, RStudio Server runs on port 8787 so you can http://localhost:8787 in your adress bar
+
+#Installing GIT, cloning repositories etc
+
+sudo apt update
+sudo apt install git
+
+##If you want to set up your own repository do so and generate an SSH key
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+ssh-keygen -t ed25519 -C "your.email@example.com"
+
+>copy with:
+cat ~/.ssh/id_edXXXXX.pub (Replace XXXXX with your ID)
+
+>Now add this key to your github under settings > SSH and GPG keys > New SSH key
+
+##If youre fine just cloning a repository use
+git clone git@github.com:yourusername/your-repo.git
+
+##Or for higgins_lab specifically
+git clone git@github.com:vubels/higgins_lab.git
+
+#Ensure you have all the libraries necessary to support your pipelines
+
+First we need to install the Gnu Scientific Library (GSL)
+
+wget http://gnu.mirror.constant.com/gsl/gsl-2.6.tar.gz
+tar -xzvf gsl-2.6.tar.gz
+cd gsl-2.6
+./configure
+make
+sudo make install
+
+>Run the following line (Only Debian based systems) for other libraries/compilers
+sudo apt-get install libgdal-dev libfontconfig1-dev libharfbuzz-dev libfribidi-dev cmake libcairo2-dev libudunits2-dev
+
+>You can now install all your dependencies in scATAC_Pipeline script if you want to compile from scratch, or just renv::restore() if you cloned the git repository
+
+#You can install multiple python versions and switch between them using
+sudo apt install software-properties-common
+sudo apt update
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt update
+
+#Set alternative versions
+sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
+sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 2
+
+>Followed by specifying the python youre using
+sudo update-alternatives --config python3
+
+>Make sure to get your python dependencies
+sudo apt-get install python3.11-venv python3.11-dev python3.11-distutils
+python3.11 -m ensurepip --upgrade
