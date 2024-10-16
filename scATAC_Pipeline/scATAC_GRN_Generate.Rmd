@@ -25,19 +25,201 @@ output: html_document
 ```
 
 ```{r}
-#renv::status()
-
 library(ArchR)
 library(cicero)
 library(monocle3)
 library(reticulate)
+library(renv)
 
-#renv::use_python(python = "/usr/bin/python3.11", type = "virtualenv")
-# Sys.setenv(RETICULATE_PYTHON = "/home/uvictor/higgins_lab/scATAC_Pipeline/renv/python/virtualenvs/renv-python-3.11/bin/python3")
-# reticulate::use_python("/home/uvictor/higgins_lab/scATAC_Pipeline/renv/python/virtualenvs/renv-python-3.11/bin/python3", required = TRUE)
+getwd()
+renv::status()
 
-# reticulate::py_available()
-# reticulate::py_install("numpy")
-# reticulate::py_install("MACS2")
+PY_PATH <- "/home/uvictor/higgins_lab/scATAC_Pipeline/renv/python/virtualenvs/renv-python-3.11/bin/python3.11"
+
+Sys.setenv(RETICULATE_PYTHON = PY_PATH)
+reticulate::use_python(PY_PATH, required = TRUE)
+
+file.exists(".Rprofile")
+
+reticulate::py_available()
+
+#reticulate::py_install("numpy")
+#reticulate::py_install("MACS2")
+
+renv::snapshot()
+
+addArchRThreads(threads = 1)
+pathToMacs2 <- findMacs2()
+```
+```{r}
+addArchRGenome("hg38")
+outputFolder = "/mnt/d/scATAC_output/Greenleaf_23"
+```
+
+```{r}
+fragmentFiles <- list.files("/mnt/d/scATAC_Input/Greenleaf_23", pattern = ".tsv.gz$", full.names = TRUE)
+
+# Extract sample names from file names
+sampleNames <- tools::file_path_sans_ext(basename(fragmentFiles))
+sampleNames <- tools::file_path_sans_ext(sampleNames)  # Remove .tsv.gz
+
+arrowFiles <- createArrowFiles(
+  inputFiles = fragmentFiles,
+  sampleNames = sampleNames,
+  minTSS = 5,  # 
+  minFrags = 1000,  # 
+  addTileMat = TRUE,
+  addGeneScoreMat = TRUE,
+  force = TRUE,
+  threads = 1
+)
+
+doubScores <- addDoubletScores(
+    input = ArrowFiles,
+    k = 10, 
+    knnMethod = "UMAP",
+    LSIMethod = 1,
+    threads = 1,
+    outDir = outputFolder
+)
+
+proj <- ArchRProject(
+  ArrowFiles = ArrowFiles, 
+  outputDirectory = outputFolder,
+  copyArrows = FALSE,
+  threads = 1
+)
+```
+
+```{r}
+p1 <- plotGroups(
+    ArchRProj = proj, 
+    groupBy = "Sample", 
+    colorBy = "cellColData", 
+    name = "TSSEnrichment_Ridge",
+    plotAs = "ridges",
+    threads = 1
+   )
+
+p2 <- plotGroups(
+    ArchRProj = proj, 
+    groupBy = "Sample", 
+    colorBy = "cellColData", 
+    name = "TSSEnrichment_Violin",
+    plotAs = "violin",
+    alpha = 0.4,
+    addBoxPlot = TRUE,
+    threads = 1
+   )
+
+plotPDF(p1,p2, name = "QC-Sample-Statistics.pdf", ArchRProj = proj, addDOC = FALSE, width = 10, height = 10)
+
+p3 <- plotFragmentSizes(ArchRProj = proj)
+p4 <- plotTSSEnrichment(ArchRProj = proj)
+
+plotPDF(p3,p4, name = "QC-Sample-FragSizes-TSSProfile.pdf", ArchRProj = proj, addDOC = FALSE, width = 10, height = 10)
+```
+
+```{r}
+saveArchRProject(ArchRProj = proj, outputDirectory = paste0(outputFolder, "/ArchProj"), load = FALSE)
+```
+
+```{r}
+proj <- filterDoublets(proj)
+
+proj <- addIterativeLSI(
+    ArchRProj = proj,
+    useMatrix = "TileMatrix", 
+    name = "IterativeLSI", 
+    iterations = 2,
+    varFeatures = 50000, 
+    dimsToUse = 1:25,
+    outDir = paste0(outputFolder, "/LSI"),
+    threads = 1,
+    verbose = TRUE
+)
+
+proj <- addHarmony(
+    ArchRProj = proj,
+    reducedDims = "IterativeLSI",
+    name = "Harmony",
+    groupBy = "Sample"
+)
+
+proj <- addClusters(
+    input = proj,
+    reducedDims = "IterativeLSI",
+    method = "Seurat",
+    name = "Clusters",
+    resolution = 0.4
+)
+
+proj <- addUMAP(
+    ArchRProj = proj, 
+    reducedDims = "IterativeLSI", 
+    name = "UMAP", 
+    nNeighbors = 30, 
+    minDist = 0.5, 
+    metric = "cosine",
+    threads = 1
+)
+```
+
+```{r}
+p5 <- plotEmbedding(ArchRProj = proj, colorBy = "cellColData", name = "Sample", embedding = "UMAP", threads = 1)
+p6 <- plotEmbedding(ArchRProj = proj, colorBy = "cellColData", name = "Clusters", embedding = "UMAP", threads = 1)
+ggAlignPlots(p5, p6, type = "h")
+
+plotPDF(p5,p6, name = "Plot-UMAP-Sample-Clusters.pdf", ArchRProj = proj, addDOC = FALSE, width = 5, height = 5)
+```
+
+```{r}
+
+proj <- addUMAP(
+    ArchRProj = proj, 
+    reducedDims = "Harmony", 
+    name = "UMAPHarmony", 
+    nNeighbors = 30, 
+    minDist = 0.5, 
+    metric = "cosine",
+    threads = 1
+)
+
+p7 <- plotEmbedding(ArchRProj = proj, colorBy = "cellColData", name = "Sample", embedding = "UMAPHarmony", threads = 1)
+p8 <- plotEmbedding(ArchRProj = proj, colorBy = "cellColData", name = "Clusters", embedding = "UMAPHarmony", threads = 1)
+
+ggAlignPlots(p7, p8, type = "h")
+plotPDF(p7,p8, name = "Plot-UMAP2Harmony-Sample-Clusters.pdf", ArchRProj = projHeme2, addDOC = FALSE, width = 5, height = 5)
+```
+
+
+```{r}
+proj <- addGroupCoverages(ArchRProj = proj, groupBy = "Clusters", threads = 1)
+
+proj <- addReproduciblePeakSet(
+    ArchRProj = proj, 
+    groupBy = "Clusters", 
+    pathToMacs2 = pathToMacs2
+)
+
+proj_peakset <- getPeakSet(proj)
+
+proj_peak <- addPeakMatrix(proj)
+getAvailableMatrices(proj)
+```
+
+```{r}
+cds <- getMonocleTrajectories(
+  ArchRProj = proj,
+  name = "Trajectory",
+  useGroups = samples,
+  principalGroup = "C23",
+  groupBy = "Clusters",
+  embedding = "UMAPHarmony",
+  clusterParams = list(),
+  graphParams = list(),
+  seed = 1
+)
+
 
 ```
