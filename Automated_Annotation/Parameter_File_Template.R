@@ -44,7 +44,7 @@ output_directory = paste0("D:/scRNA_output/", project_name, "/")
 
 #The directory containing the R scripts and sample_cmap.rds file
 
-script_directory = "C:/Users/UVict/Desktop/Higgins_Lab-main/Automated_Annotation/"
+script_directory = "C:/Users/UVict/Desktop/Higgins_Lab/Automated_Annotation/"
 
 #Only use if your know how many cores your CPU has, otherwise comment out.
 #Depending on OS you might want to just set nThreads = 1 to avoid potential errors from parallelization

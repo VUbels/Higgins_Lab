@@ -19,7 +19,7 @@ load_libraries <- function(libraries) {
 # Automated pre-processing functions for mtx
 ############################################
 
-read_all_mtx_and_create_seurat <- <- function(directory) {
+read_all_mtx_and_create_seurat <- function(directory) {
   # Initialize a vector to store Seurat object names
   pattern_files <- c()
   
