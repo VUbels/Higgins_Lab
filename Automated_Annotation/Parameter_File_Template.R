@@ -20,7 +20,7 @@ libraries <- c(
     "future", "ggplot2", "ggrepel", "gridExtra", "Matrix", "patchwork",
     "readxl", "scales", "stringr", "tidyverse", "writexl", "DoubletFinder",
     "celda", "harmony", "TxDb.Hsapiens.UCSC.hg38.knownGene", "org.Hs.eg.db",
-    "Rmagic", "viridis", "phateR", "ggthemes", "magick", "reticulate",
+    "Rmagic", "viridis", "phateR", "ggthemes", "magick",
     "tidyr", "ggrastr", "renv", "extrafont", "ape", "openxlsx"
   )
 

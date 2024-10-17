@@ -32,24 +32,11 @@ options(future.globals.maxSize = nThreads * 1000 * 1024^2)
 knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_knit$set(root.dir = output_directory)
 
-modules = c('leidenalg', 'igraph', 'magic')
-
-module_verification <- function(module) {
-  available <- reticulate::py_module_available(module)
-  if (available) {
-    cat(sprintf("Module '%s' is available and will be imported.\n", module))
-    reticulate::import(module)
-  } else {
-    cat(sprintf("Module '%s' is not available.\n", module))
-  }
-}
-
-# Check availability and import each module
-lapply(modules, module_verification)
-
 load_libraries(libraries)
 
-pymagic <- import('magic')
+# Use the function
+pymodules <- setup_python_environment()
+pymagic <- pymodules$magic
 ```
 
 Batch reading MTX files
