@@ -72,9 +72,6 @@ Doublet removal
 ```{r}
 dir.create(paste0(output_directory_base, project_name, "/Clustering_01/"))
 
-# Retrieve all objects in the global environment that match the pattern "seurat_"
-seurat.objects_names <- ls(envir = .GlobalEnv, pattern = pattern_files)
-
 # Get the actual Seurat objects based on the names
 seurat.objects <- mget(seurat.objects_names, envir = .GlobalEnv)
 
@@ -94,7 +91,6 @@ rm(seurat.objects)
 
 Ambient RNA removal
 ```{r}
-seurat.objects_names <- ls(envir = .GlobalEnv, pattern = pattern_files)
 seurat.objects <- mget(seurat.objects_names, envir = .GlobalEnv)
 
 seurat.objects <- lapply(seurat.objects, runDecontX)
@@ -109,7 +105,7 @@ rm(seurat.objects)
 
 Applies diseaseStatus to each object (Based on filename, groups objects based on experiment)
 ```{r}
-seurat.objects <- mget(pattern_files, envir = .GlobalEnv)
+seurat.objects <- mget(seurat.objects_names, envir = .GlobalEnv)
 
 for (i in 1:length(seurat.objects)) {
   seurat.objects[[i]]@meta.data$orig.ident <- seurat.objects_names[i]
@@ -140,7 +136,6 @@ for (i in 1:length(seurat.objects)) {
 list2env(setNames(seurat.objects, names(seurat.objects)), envir = .GlobalEnv)
 
 seurat_obj_merged <- merge(x=seurat.objects[[1]], y=seurat.objects[2:length(seurat.objects)], project=project_name)
-
 
 rm(list = seurat.objects_names)
 rm(seurat.objects)
