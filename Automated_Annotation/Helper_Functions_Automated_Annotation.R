@@ -13,13 +13,56 @@ load_libraries <- function(libraries) {
   }
 }
 
+setup_python_environment <- function() {
+  library(reticulate)
+  
+  env_name <- "renv/python/virtualenvs/renv-python-3.11.9"
+  required_packages <- c("numpy==1.24.3", "scipy==1.10.1", "magic-impute==3.0.0", "leidenalg", "igraph")
+  
+  # Check if the Python environment exists
+  if (!virtualenv_exists(env_name)) {
+    stop("Python virtual environment not found. Please ensure renv.lock is configured correctly and run renv::restore().")
+  }
+  
+  # Activate the environment
+  use_virtualenv(env_name, required = TRUE)
+  
+  # Check which packages are installed
+  installed_packages <- py_list_packages()
+  missing_packages <- required_packages[!sapply(strsplit(required_packages, "=="), function(x) x[1]) %in% installed_packages$package]
+  
+  if (length(missing_packages) > 0) {
+    cat("Some required packages are missing. Installing them now...\n")
+    py_install(missing_packages, pip = TRUE)
+  } else {
+    cat("All required packages are already installed.\n")
+  }
+  
+  # Import and verify all required modules
+  modules_to_import <- c('numpy', 'scipy', 'magic', 'leidenalg', 'igraph')
+  imported_modules <- list()
+  
+  for (module in modules_to_import) {
+    tryCatch({
+      imported_modules[[module]] <- import(module)
+      cat(sprintf("Successfully imported %s\n", module))
+    }, error = function(e) {
+      cat(sprintf("Failed to import %s: %s\n", module, e$message))
+    })
+  }
+  
+  cat("Setup complete.\n")
+  
+  # Return the imported modules
+  return(imported_modules)
+}
 
 
 ############################################
 # Automated pre-processing functions for mtx
 ############################################
 
-read_all_mtx_and_create_seurat <- <- function(directory) {
+read_all_mtx_and_create_seurat <- function(directory) {
   # Initialize a vector to store Seurat object names
   pattern_files <- c()
   

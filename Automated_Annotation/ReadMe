@@ -1,0 +1,1 @@
+For this pipeline to work you need to install and run through R-4.3.2. Any other version will likely brick the code due to library incompatability. Get 3.11.9 python installer from https://www.python.org/downloads/windows/

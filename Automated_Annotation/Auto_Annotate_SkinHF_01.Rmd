@@ -17,8 +17,6 @@ editor_options:
 
 ```{r}
 ### Parameters for batch processing of scRNA files
-renv::restore()
-
 r_files <- list.files(pattern = "\\.R$", full.names = TRUE)
 
 # Source each file
@@ -34,24 +32,11 @@ options(future.globals.maxSize = nThreads * 1000 * 1024^2)
 knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_knit$set(root.dir = output_directory)
 
-modules = c('leidenalg', 'igraph', 'magic')
-
-module_verification <- function(module) {
-  available <- reticulate::py_module_available(module)
-  if (available) {
-    cat(sprintf("Module '%s' is available and will be imported.\n", module))
-    reticulate::import(module)
-  } else {
-    cat(sprintf("Module '%s' is not available.\n", module))
-  }
-}
-
-# Check availability and import each module
-lapply(modules, module_verification)
-
 load_libraries(libraries)
 
-pymagic <- import('magic')
+# Use the function
+pymodules <- setup_python_environment()
+pymagic <- pymodules$magic
 ```
 
 Batch reading MTX files
@@ -87,9 +72,6 @@ Doublet removal
 ```{r}
 dir.create(paste0(output_directory_base, project_name, "/Clustering_01/"))
 
-# Retrieve all objects in the global environment that match the pattern "seurat_"
-seurat.objects_names <- ls(envir = .GlobalEnv, pattern = pattern_files)
-
 # Get the actual Seurat objects based on the names
 seurat.objects <- mget(seurat.objects_names, envir = .GlobalEnv)
 
@@ -109,7 +91,6 @@ rm(seurat.objects)
 
 Ambient RNA removal
 ```{r}
-seurat.objects_names <- ls(envir = .GlobalEnv, pattern = pattern_files)
 seurat.objects <- mget(seurat.objects_names, envir = .GlobalEnv)
 
 seurat.objects <- lapply(seurat.objects, runDecontX)
@@ -122,18 +103,39 @@ for (i in seq_along(seurat.objects)) {
 rm(seurat.objects)
 ```
 
-Applies disease state to each object based on assigned 'tag' parameter
+Applies diseaseStatus to each object (Based on filename, groups objects based on experiment)
 ```{r}
-seurat.objects_names <- ls(envir = .GlobalEnv, pattern = pattern_files)
 seurat.objects <- mget(seurat.objects_names, envir = .GlobalEnv)
 
 for (i in 1:length(seurat.objects)) {
   seurat.objects[[i]]@meta.data$orig.ident <- seurat.objects_names[i]
 }
 
-seurat_obj_merged <- merge(x=seurat.objects[[1]], y=seurat.objects[2:length(seurat.objects)], project=project_name)
+get_disease_status <- function(name) {
+  # Extract the part after GSM number and underscore
+  match <- regexpr("GSM\\d+_([A-Z_]+)", name)
+  if (match != -1) {
+    extracted <- regmatches(name, match)[[1]]
+    # Extract everything after the GSM number and underscore, up to any digits
+    status <- sub("GSM\\d+_([A-Z_]+).*", "\\1", extracted)
+    return(status)
+  } else {
+    return("Unknown")
+  }
+}
 
-seurat_obj_merged <- assign_state(seurat_obj_merged, tags)
+for (i in 1:length(seurat.objects)) {
+  # Assign orig.ident
+  seurat.objects[[i]]@meta.data$orig.ident <- names(seurat.objects)[i]
+  
+  # Determine and assign disease status
+  disease_status <- get_disease_status(names(seurat.objects)[i])
+  seurat.objects[[i]]@meta.data$diseaseStatus <- disease_status
+}
+
+list2env(setNames(seurat.objects, names(seurat.objects)), envir = .GlobalEnv)
+
+seurat_obj_merged <- merge(x=seurat.objects[[1]], y=seurat.objects[2:length(seurat.objects)], project=project_name)
 
 rm(list = seurat.objects_names)
 rm(seurat.objects)
@@ -326,8 +328,8 @@ for (cluster in clusters_without_unique_genes) {
   single_cluster_markers <- bind_rows(single_cluster_markers, cluster_markers)
 }
 
-#output_filename_markers <- paste0(output_directory, "/Clustering_01/Markers_PreCluster_HighSpecificity", dataset, ".xlsx")
-#write_xlsx(MarkerTibble, output_filename_markers)
+output_filename_markers <- paste0(output_directory, "/Clustering_01/Markers_PreClustering", dataset, ".xlsx")
+write_xlsx(MarkerTibble, output_filename_markers)
 
-#winDialog("ok", "Script finished running")
+winDialog("ok", "Script finished running")
 ```
