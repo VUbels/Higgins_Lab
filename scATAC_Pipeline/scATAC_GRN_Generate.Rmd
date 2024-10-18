@@ -17,7 +17,7 @@ output: html_document
 # 
 # ##DO NOT CHANGE GGPLOT2 VERSION UPDATING TO >3.4.0 BRICKS ARCHR PLOT FUNCTION##
 # 
-# BiocManager::install(c("DirichletMultinomial", "TFBSTools", "Gviz", "GenomicRanges", "rtracklayer", 'BiocGenerics', 'DelayedArray', 'DelayedMatrixStats', 'limma', 'lme4', 'S4Vectors', 'SingleCellExperiment', 'SummarizedExperiment', 'batchelor', 'HDF5Array', 'terra', 'ggrastr'))
+# BiocManager::install(c("DirichletMultinomial", "TFBSTools", "Gviz", "GenomicRanges", "rtracklayer", 'BiocGenerics', 'DelayedArray', 'DelayedMatrixStats', 'limma', 'lme4', 'S4Vectors', 'SingleCellExperiment', 'SummarizedExperiment', 'batchelor', 'HDF5Array', 'terra', 'ggrastr', "rtracklayer"))
 # 
 # devtools::install_github("GreenleafLab/ArchR", ref="master", repos = BiocManager::repositories())
 # devtools::install_github('cole-trapnell-lab/monocle3')
@@ -32,9 +32,6 @@ library(reticulate)
 library(renv)
 library(Seurat)
 library(harmony)
-
-getwd()
-renv::status()
 
 PY_PATH <- "/home/uvictor/higgins_lab/scATAC_Pipeline/renv/python/virtualenvs/renv-python-3.11/bin/python3.11"
 Sys.setenv(RETICULATE_PYTHON = PY_PATH)
@@ -71,8 +68,7 @@ ArrowFiles <- createArrowFiles(
   threads = 1
 )
 
-ArrowFiles <- list.files(outputFolder, pattern = ".arrow$", full.names = TRUE)
-
+ArrowFiles <- list.files("/home/uvictor/higgins_lab/scATAC_Pipeline", pattern = ".arrow$", full.names = TRUE)
 
 doubScores <- addDoubletScores(
     input = ArrowFiles,
@@ -122,13 +118,13 @@ plotPDF(p3,p4, name = "QC-Sample-FragSizes-TSSProfile.pdf", ArchRProj = proj, ad
 ```
 
 ```{r}
+proj <- filterDoublets(proj)
+
 saveArchRProject(ArchRProj = proj, outputDirectory = outputFolder, load = FALSE)
 ```
 
 ```{r}
 proj <- loadArchRProject(path = outputFolder, force = FALSE, showLogo = TRUE)
-
-proj <- filterDoublets(proj)
 
 proj <- addIterativeLSI(
     ArchRProj = proj,
@@ -177,6 +173,8 @@ p6 <- plotEmbedding(ArchRProj = proj, colorBy = "cellColData", name = "Clusters"
 ggAlignPlots(p5, p6, type = "h")
 
 plotPDF(p5,p6, name = "Plot-UMAP-Sample-Clusters.pdf", ArchRProj = proj, addDOC = FALSE, width = 5, height = 5)
+
+saveArchRProject(ArchRProj = proj, outputDirectory = outputFolder, load = FALSE)
 ```
 
 ```{r}
@@ -195,6 +193,8 @@ p8 <- plotEmbedding(ArchRProj = proj, colorBy = "cellColData", name = "Clusters"
 
 ggAlignPlots(p7, p8, type = "h")
 plotPDF(p7,p8, name = "Plot-UMAP2Harmony-Sample-Clusters.pdf", ArchRProj = proj, addDOC = FALSE, width = 5, height = 5)
+
+saveArchRProject(ArchRProj = proj, outputDirectory = outputFolder, load = FALSE)
 ```
 
 
@@ -212,37 +212,163 @@ proj_peakset <- getPeakSet(proj)
 
 proj_peak <- addPeakMatrix(proj, threads = 1)
 
-getAvailableMatrices(proj)
+getAvailableMatrices(proj_peak)
+
+saveArchRProject(ArchRProj = proj, outputDirectory = outputFolder, load = FALSE, threads = 1)
+saveArchRProject(ArchRProj = proj_peak, outputDirectory = outputFolder, load = FALSE, threads = 1)
 ```
 
 ```{r}
+proj_peak <- loadArchRProject(path = "/mnt/d/scATAC_output/Greenleaf_23/")
+
 peak_matrix <- getMatrixFromProject(
   ArchRProj = proj_peak,
   useMatrix = "PeakMatrix",
+  useSeqnames = NULL,
+  verbose = TRUE,
   binarize = FALSE,
-  thread = 1
+  threads = 1,
+  logFile = createLogFile("getMatrixFromProject")
 )
 
-# Get peak ranges
+# Assuming 'peak_counts' is your sparse dgCMatrix from the RangedSummarizedExperiment object
+peak_counts <- assay(peak_matrix)  # Sparse matrix
+
+# Extract non-zero entries using 'summary' method (gives row index, col index, and value)
+sparse_data <- summary(peak_counts)
+
+head(sparse_data)
+
+# Extract the cell names and peak coordinates
+cell_names <- colnames(peak_counts)
 peak_ranges <- rowRanges(peak_matrix)
 
-# Create peak coordinates in the required format
-peak_coords <- paste0(
-  seqnames(peak_ranges), "_",
-  start(peak_ranges), "_",
-  end(peak_ranges)
+# Create peak coordinate strings
+peak_coords <- paste0(seqnames(peak_ranges), "_", 
+                      start(peak_ranges), "_", 
+                      end(peak_ranges))
+
+rm(peak_counts, peak_ranges, peak_matrix)
+
+# Now create the data frame in the required format
+cicero_data <- data.frame(
+  peak = peak_coords[sparse_data$i],  # Convert row indices to peak names
+  cell = cell_names[sparse_data$j],   # Convert column indices to cell names
+  count = sparse_data$x               # Non-zero counts
 )
 
-# Convert sparse matrix to data frame
-peak_df <- as.data.frame(as.matrix(assay(peak_matrix)))
+rm(sparse_data)
+gc()
 
-# Reshape the data frame to long format
-peak_long <- data.table(
-  peak = rep(peak_coords, ncol(peak_df)),
-  cell = rep(colnames(peak_df), each = nrow(peak_df)),
-  count = as.integer(as.matrix(peak_df))
-)
+subset_fraction <- 0.001
 
-# Remove rows with zero counts
-peak_long <- peak_long[count > 0]
+# Subset rows randomly to get a manageable sample (adjust based on available memory)
+set.seed(1)  # Ensure reproducibility
+cicero_data_subset <- cicero_data[sample(nrow(cicero_data), size = round(nrow(cicero_data) * subset_fraction)), ]
+
+# Check the first few rows to ensure correct format
+head(cicero_data_subset)
+
+write.table(cicero_data_subset, paste0(outputFolder, "cicero_input_subset_data.txt"),  sep = "\t", 
+            quote = FALSE, 
+            row.names = FALSE, 
+            col.names = FALSE)
+```
+
+
+
+```{r}
+write.table(cicero_data, paste0(outputFolder, "cicero_input_data.txt"), sep = "\t", 
+            quote = FALSE, 
+            row.names = FALSE, 
+            col.names = FALSE)
+```
+
+
+```{r}
+outputFolder = "/mnt/d/scATAC_output/"
+
+input_cds <- make_atac_cds(paste0(outputFolder, "cicero_input_data.txt"), binarize = FALSE)
+```
+
+```{r}
+hist(Matrix::colSums(exprs(input_cds)))
+```
+```{r}
+nlow <- 1500
+ntop <- 20000
+col_sums <- Matrix::colSums(exprs(input_cds))
+nmax <- max(col_sums)
+
+# Create the histogram
+hist(col_sums[col_sums <= nmax],
+     breaks = seq(0, nmax, length.out = 100),
+     xlim = c(0, nmax),
+     main = "Histogram of Column Sums",
+     xlab = "Column Sums",
+     ylab = "Frequency")
+
+# Add vertical lines at nlow and ntop
+abline(v = nlow, col = "red", lty = 2)
+abline(v = ntop, col = "blue", lty = 2)
+
+# Calculate percentages
+total_cells <- length(col_sums)
+cells_below_nlow <- sum(col_sums <= nlow)
+cells_between <- sum(col_sums > nlow & col_sums < ntop)
+cells_above_ntop <- sum(col_sums >= ntop)
+
+percent_below_nlow <- (cells_below_nlow / total_cells) * 100
+percent_between <- (cells_between / total_cells) * 100
+percent_above_ntop <- (cells_above_ntop / total_cells) * 100
+
+# Print results
+cat("\nPercentage of cells below", nlow, ":", round(percent_below_nlow, 2), "%\n")
+cat("Percentage of cells between", nlow, "and", ntop, ":", round(percent_between, 2), "%\n")
+cat("Percentage of cells above", ntop, ":", round(percent_above_ntop, 2), "%\n")
+```
+
+```{r}
+input_cds <- input_cds[,Matrix::colSums(exprs(input_cds)) >= nlow]
+input_cds <- input_cds[,Matrix::colSums(exprs(input_cds)) <= ntop]
+```
+
+```{r}
+input_cds <- detect_genes(input_cds)
+input_cds <- estimate_size_factors(input_cds)
+input_cds <- preprocess_cds(input_cds, method = "LSI", verbose = TRUE)
+input_cds <- reduce_dimension(input_cds, reduction_method = 'UMAP', 
+                              preprocess_method = "LSI", verbose = TRUE)
+
+saveRDS(input_cds, file = paste0(outputFolder, "/Cicero_Input.RDS"))
+```
+
+```{r}
+plot_cells(input_cds, reduction_method = "LSI")
+
+ggsave(paste0(outputFolder, "Reduction_CiceroInput.pdf"), dpi = 320, width = 5, height = 5)
+```
+
+```{r}
+options(mc.cores = 1)
+
+umap_coords <- reducedDims(input_cds)$UMAP
+cicero_cds <- make_cicero_cds(input_cds, reduced_coordinates = umap_coords,   k = 30)
+saveRDS(cicero_cds, file = paste0(outputFolder, "/Cicero_PreCalc.RDS"))
+```
+
+```{r}
+gene_anno <- rtracklayer::readGFF("/mnt/d/scATAC_Input/homo_sapiens.GRCh38.Regulatory_Build.regulatory_features.20240230.gff")
+
+# rename some columns to match plotting requirements
+gene_anno$chromosome <- paste0("chr", gene_anno$seqid)
+gene_anno$gene <- gene_anno$gene_id
+gene_anno$transcript <- gene_anno$transcript_id
+gene_anno$symbol <- gene_anno$gene_name
+```
+
+```{r}
+conns <- run_cicero(cicero_cds, sample_genome, sample_num = 2) 
+head(conns)
+saveRDS(conns, file = paste0(outputFolder, "/Cicero_Conns.RDS"))
 ```
