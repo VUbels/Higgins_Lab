@@ -47,7 +47,7 @@ sudo rstudio-server start
 sudo apt update
 sudo apt install git
 
-##If you want to set up your own repository do so and generate an SSH key
+##Generate an SSH key, either to set up your own repository or to clone
 git config --global user.name "Your Name"
 git config --global user.email "your.email@example.com"
 ssh-keygen -t ed25519 -C "your.email@example.com"
