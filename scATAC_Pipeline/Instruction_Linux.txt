@@ -3,6 +3,8 @@ wsl --install -d Ubuntu
 
 ###UBUNTU/DEBIAN###
 
+>To copy/paste in ubuntu > right click ubuntu window > properties > options > enable use Ctrl+Shift+C/V as Copy/Paste
+
 ###Install and manage multiple R versions
 sudo apt update && sudo apt upgrade openssl
 sudo apt install -y curl
