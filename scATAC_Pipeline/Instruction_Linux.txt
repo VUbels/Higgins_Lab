@@ -7,9 +7,24 @@ wsl --install -d Ubuntu
 sudo apt update && sudo apt upgrade openssl
 sudo apt install -y curl
 
+#Option 1 for getting specific R version using rig, prefered method as you can easily swap
 curl -Ls https://github.com/r-lib/rig/releases/download/latest/rig-linux-latest.tar.gz | sudo tar xz -C /usr/local
-
 rig add 4.3.3
+>Verify
+R --version
+
+
+#Option 2 if rig returns HandShakeFailure due to organisation not allowing rig pulls
+sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys '0x51716619e084dab9'
+>Change the repository to your ubuntu system, defaults to latest ubuntu
+sudo add-apt-repository 'deb https://cloud.r-project.org/bin/linux/ubuntu focal-cran40/'
+apt-cache show r-base
+sudo apt install r-base=4.3.3-1 r-base-dev=4.3.3-1
+sudo apt install r-base-core r-doc-info r-doc-html r-base-html
+>The following line locks our R version until released to prevent automatic updating
+sudo apt-mark hold r-base
+>Verify
+R --version
 
 #Install RStudio and RstudioServer
 
