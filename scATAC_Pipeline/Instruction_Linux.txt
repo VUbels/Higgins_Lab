@@ -92,6 +92,7 @@ sudo apt-get install libgdal-dev libfontconfig1-dev libharfbuzz-dev libfribidi-d
 sudo apt install software-properties-common
 sudo apt update
 sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt install python3.11
 sudo apt update
 
 #Set alternative versions
