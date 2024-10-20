@@ -4,7 +4,7 @@ Automated scRNA/scATAC/RNA/Microarray analysis pipelines. Each folder contains a
 
 -Automated_Annotation: Pseudo-automated annotation of Hair/Skin scRNA datasets using Adjusted Iterative Latent Semantic Idexing (LSI). Requires MTX, H5, 10x as input.
 
--Microarray_Analysis: Simple automatated microarray preprocessing and analysis using Oligo and GAGE. Requires Microarray (CEL) or batch RNA seq as input.
+-Microarray_Analysis: Simple automated Microarray/RNA preprocessing and analysis using Oligo and GAGE. Requires Microarray (CEL) or batch RNA seq as input.
 
 -CellChat_Single: infers intercellular communication. Runs a standard CellChat pipeline on a single annotated scRNA dataset. Requires Seurat object as input.
 
