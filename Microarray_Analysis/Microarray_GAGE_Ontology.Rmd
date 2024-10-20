@@ -1,0 +1,644 @@
+---
+title: "Microarray_Analysis"
+author: "Victor Ubels"
+date: "2024-10-20"
+output: html_document
+---
+
+```{r}
+#If this is your first time running any of the Microarray_Analysis.RProj scripts re initiate the renv environment
+
+#renv::restore()
+```
+
+```{r}
+library(affy)
+library(oligo)
+library(statmod)
+library(limma)
+library(gage)
+library(pd.clariom.s.human)
+library(oligoData)
+library(affycoretools)
+library(ggplot2)
+library(gplots)
+library(RColorBrewer)
+library(openxlsx)
+library(EnhancedVolcano)
+library(org.Hs.eg.db)
+library(extrafont)
+library(extrafontdb)
+library(tidyr)
+library(dplyr)
+library(svglite)
+
+wd <- getwd()
+font_import(paths = wd, pattern = "BAHNSCHRIFT", prompt = FALSE) 
+```
+
+Set up your input/output and standardized experiment setup
+
+```{r}
+#Input directory for Cel files
+input_dir = "D:/Microarray_Data"
+
+#Experimental setup
+experiment_setup <- "TW_vs_WT"
+EXP <- "TW"
+WT <- "WT"
+
+#Load additional fonts for pretty plots
+loadfonts(device = "win")
+
+#Set output folder for additional results
+output_dir_standard = paste0(input_dir, "/Standard_Analysis")
+output_dir_gage = paste0(input_dir, "/GAGE_Analysis")
+dir.create(output_dir_standard)
+dir.create(output_dir_gage)
+```
+Set up your design matrix
+
+```{r}
+#Reads previously generated normalized data
+normData <- readRDS(paste0(input_dir, "/Preprocessing/Processed_Microarray_Data.rds"))
+
+#Design your model matrix, example shows two experiment variations across four lanes.
+
+#Helper for matrix design
+normData@phenoData@data[["complex"]]
+
+#Due to the way matrix formation works this helps set up the design. Based on normData@phenoData@data[["complex"]] annotate according to intuition with WT set to 0. Example contains X > WT > X > WT, thus 1,0,1,0. If more experiments such as X2, X1, WT, X1, WT, X2 vector would be 2,1,0,1,0,2
+
+Intuitive_Annotation <- c(1,0,1,0)
+factor <- rev(c(Intuitive_Annotation))
+
+design <- model.matrix(~ 0+factor(factor))
+
+#Set this to order of normData@phenoData@data[["complex"]] by first appearance. So X > WT therefore c("X", "WT"). If more experiments such as X1, WT, X2 vector would be c("X1, WT, X2")
+
+colnames(design) <- c(EXP, WT)
+EXP_column <- colnames(design)[1]
+WT_column <- colnames(design)[2]
+```
+Verify chip and load in gene sets
+
+```{r}
+#Verify reference chip set is correctly loaded
+chipset <- "Clariom.S.Human"
+pd.clariom.s.human
+
+#Which genesets to compare to KEGG data needs some wrangling
+#GAGE requires ENTREZID and not GENESYMBOL
+
+data(kegg.gs)
+#kegg.hsa <- kegg.gsets("human")
+#kegg.gs <- kegg.hsa$kg.sets[kegg.hsa$sig.idx]
+
+data(go.gs)
+go.hs <- go.gsets(species="human")
+go.bp <- go.hs$go.sets[go.hs$go.subs$BP]
+
+hs <- org.Hs.eg.db
+```
+
+Set up colour schemes
+
+```{r}
+#Custom colour schemes because oligo is aweful, feel free to play around/comment out this for easier time. Needs to be at equal to N samples.
+custom_colors <- c("#DA4948", "#006199", "#60B8AA", "#B8B2E9")
+
+#Ontology summary colour scheme
+category_colors <- c(
+  "Transcription and Translation" = "#E67844",  
+  "Cell Division, Replication and Repair" = "#006199",
+  "Energy and Carbohydrate Metabolism" = "#E8CBD0",
+  "Immune System" = "#2381D0",  
+  "Signaling" = "#B8B2E9",  
+  "Cellular Interactions and Motility" = "#60B8AA", 
+  "Other" = "#D0D5DC",
+  "Transduction" = "#DA4948",
+  "Biosynthesis" = "#45a842",
+  "Degradation" = "#9942a8"
+)
+```
+
+From here you can continuously run everything as the pipeline is automated
+
+```{r}
+all.eset <- annotateEset(normData, annotation(normData))
+dim(all.eset)
+
+pdf(paste0(output_dir_standard, "/LogFC_Samples.pdf"), width = 5, height = 5)
+plotMDS(all.eset)
+dev.off()
+
+filtered.eset <- getMainProbes(all.eset)
+
+out <- data.frame(fData(filtered.eset), exprs(filtered.eset))
+write.xlsx(out, paste0(output_dir_standard, "/Annotated_Array_Data.xlsx"))
+```
+
+```{r}
+#DecideTests
+fit <- lmFit(filtered.eset, design)
+
+#Set contrast matrix to appropriate setting. Here we want the differential expression between an experimental condition and WT thus Experiment - WildType
+contrast_formula <- paste0(EXP_column, "-", WT_column)
+contrast.matrix <- makeContrasts(contrast_formula, levels=design)
+fit2 <- contrasts.fit(fit, contrast.matrix)
+fit2 <- eBayes(fit2, trend = T, robust = T)
+
+topTable <- topTable(fit2, coef=1, adjust="none", number = 25000)
+results <- decideTests(fit2, adjust.method = "none", p.value = 0.05, lfc = 0)
+
+vennDiagram(results)
+summary(results)
+
+volcanoplot(fit2, coef = 1, highlight = 15, names = fit2$genes$SYMBOL, style = "p-value", hl.col = "#006199", xlab = "Log2 Fold Change", ylab = NULL, pch=15, cex=0.35, family = "Bahnschrift")
+
+pdf(paste0(output_dir_standard, paste0("/Differential_Gene_Expression_", experiment_setup, ".pdf")))
+plotMD(fit, coef=EXP_column, status=results, hl.col = c( '#DA4948', '#006199'), main = paste0("Differential Gene Expression ", experiment_setup))
+dev.off()
+```
+
+
+```{r}
+has_ggalt <- ! is(try(find.package("ggalt")), "try-error")
+
+topTable <- na.omit(topTable)
+topTable$SYMBOL <- make.unique(topTable$SYMBOL)
+topTable$GeneName <- topTable$SYMBOL
+rownames(topTable) <- topTable$SYMBOL
+
+EVp <- EnhancedVolcano(topTable,
+  lab = topTable$SYMBOL,
+  x = 'logFC',
+  y = 'P.Value',
+  title = paste0(EXP_column, " vs ", WT_column),
+  subtitle = 'Differential Gene Expression',
+  legendPosition = 'Middle',
+  pCutoff = 0.055,
+  FCcutoff = 0.8,
+  pointSize = 3.0,
+  labSize = 4.0,
+  ylim = 0.05,
+  col = c('#D0D5DC', '#60B8AA', '#006199', '#DA4948'),
+  xlim = c(-5, 5),
+  titleLabSize = 25) +
+  theme(
+    plot.title = element_text(size = 25, hjust = 0.5, family = "Bahnschrift"),
+    plot.subtitle = element_text(size = 20, hjust = 0.5, family = "Bahnschrift"),
+    axis.title = element_text(family = "Bahnschrift"),
+    axis.text = element_text(family = "Bahnschrift"),
+    legend.title = element_text(family = "Bahnschrift"),
+    legend.text = element_text(family = "Bahnschrift")
+  )
+
+EVp
+
+ggsave(paste0(output_dir_standard, "/EnhancedVolcanoPlot_", experiment_setup , ".png"), width = 7, height = 10)
+```
+
+```{r}
+gagedf <- subset(out,select=c(3, 5:ncol(out)))
+gagedf <- na.omit(gagedf)
+gagedf <- gagedf[!duplicated(gagedf$SYMBOL),]
+
+symbol_translate <- c(gagedf$SYMBOL)
+
+translated_list <- biomaRt::select(hs, 
+       keys = symbol_translate,
+       columns = c("SYMBOL", "ENTREZID"),
+       keytype = "SYMBOL")
+
+translated_list %>% distinct(ENTREZID, .keep_all = FALSE)
+translated_list <- na.omit(translated_list)
+translated_list <- translated_list %>% distinct()
+translated_list <- translated_list[!duplicated(translated_list$SYMBOL),]
+sum(duplicated(translated_list$SYMBOL))
+
+gagedf_filtered <- merge(gagedf, translated_list, by.x="SYMBOL", by.y="SYMBOL")
+rownames(gagedf_filtered) <- gagedf_filtered$ENTREZID
+gagedf_filtered <- gagedf_filtered %>% select(-c(SYMBOL, ENTREZID))
+m.data <- as.matrix(gagedf_filtered)
+
+head(rownames(m.data))
+
+cn=colnames(m.data)
+WT_REF = grep(WT, cn, ignore.case =T)
+EXP_REF = grep(EXP, cn, ignore.case =T)
+
+Table.kegg.p <- gage(m.data, gsets = kegg.gs, ref = WT_REF, samp = EXP_REF, compare = "as.group")
+Table.go.p <- gage(m.data, gsets = go.gs, ref = WT_REF, compare = "as.group")
+Table.bp.p <- gage(m.data, gsets = go.bp, ref = WT_REF, samp = EXP_REF)
+
+
+head(Table.kegg.p$greater[, 1:5], 10)
+head(Table.kegg.p$less[, 1:5], 10)
+head(Table.kegg.p$stats)
+
+head(Table.go.p$greater[, 1:5], 10)
+head(Table.go.p$less[, 1:5], 4)
+head(Table.go.p$stats)
+
+head(Table.bp.p$greater[, 1:5], 10)
+head(Table.bp.p$less[, 1:5], 10)
+head(Table.bp.p$stats)
+```
+KEGG Pathway Analysis
+
+```{r fig.height = 10, fig.width = 10}
+Tibble.keg <- sigGeneSet(Table.kegg.p, heatmap = TRUE, outname = "GAGE_Results", cutoff = 0.05, qpval = "p.val")
+Tibble.keg
+
+write.xlsx(Tibble.keg, paste0(output_dir_gage, "/Differential_Pathways_KEGG.xlsx"), colNames = TRUE, rowNames = TRUE, startCol = 0)
+
+Differential_Pathways <- read.xlsx(paste0(output_dir_gage, "/Differential_Pathways_KEGG.xlsx"))
+
+Differential_Pathways_Down <- read.xlsx(paste0(output_dir_gage, "/Differential_Pathways_KEGG.xlsx"), sheet = 'less')
+
+Differential_Pathways = bind_rows(Differential_Pathways, Differential_Pathways_Down)
+names(Differential_Pathways)[1] <- "pathway"
+
+df_pos <- Differential_Pathways %>% filter(stat.mean >= 0)
+df_neg <- Differential_Pathways %>% filter(stat.mean < 0)
+df_pos$type <- 'positive'
+df_neg$type <- 'negative'
+df_pos <- df_pos %>% mutate(rank = rank(-stat.mean))
+df_neg <- df_neg %>% mutate(rank = rank(stat.mean))
+df <- bind_rows(df_pos, df_neg)
+
+df <- df %>%
+  mutate(pathway = gsub("hsa[0-9]* ", "", pathway))
+
+# Split the dataframe into positive and negative subsets
+positive_df <- df %>% filter(stat.mean > 0) %>% arrange(rank)
+negative_df <- df %>% filter(stat.mean < 0) %>% arrange(rank)
+
+# Combine positive and negative dataframes
+combined_df <- bind_rows(
+  positive_df %>% mutate(direction = "positive"),
+  negative_df %>% mutate(direction = "negative")
+) %>% mutate(rank = rank - 1)
+
+combined_df <- combined_df %>%
+  mutate(pathway = case_when(
+    pathway == "Protein processing in endoplasmic reticulum" ~ "Protein processing in ER",
+    pathway == "Glycosaminoglycan biosynthesis - chondroitin sulfate" ~ "Glycosaminoglycan biosynthesis",
+    TRUE ~ pathway
+  ))
+
+combined_df <- combined_df %>%
+  mutate(significance = case_when(
+    p.val < 0.0005 ~ "***",
+    p.val < 0.005 ~ "**",
+    p.val < 0.05 ~ "*",
+    TRUE ~ ""
+  ))
+
+combined_df <- combined_df %>%
+  mutate(category = case_when(
+    grepl("transcription|translation|ribosome", pathway, ignore.case = TRUE) ~ "Transcription and Translation",
+    grepl("repair|replication|division|cycle", pathway, ignore.case = TRUE) ~ "Cell Division, Replication and Repair",
+    grepl("metabolism|energy|oxidative", pathway, ignore.case = TRUE) ~ "Energy and Carbohydrate Metabolism",
+    grepl("biosynthesis|biogenesis", pathway, ignore.case = TRUE) ~ "Biosynthesis",
+    grepl("immune|toxicity|antigen", pathway, ignore.case = TRUE) ~ "Immune System",
+    grepl("signaling|pathway", pathway, ignore.case = TRUE) ~ "Signaling",
+    grepl("transduction", pathway, ignore.case = TRUE) ~ "Transduction",
+    grepl("motility|adhesion|junction", pathway, ignore.case = TRUE) ~ "Cellular Interactions and Motility",
+    grepl("apoptosis|proteolysis", pathway, ignore.case = TRUE) ~ "Degradation",
+    TRUE ~ "Other"  # Default category for unmatched cases
+  ))
+
+windowsFonts()
+
+nudge_distance <- .6
+font = 'Bahnschrift'
+
+label_format <- function(x) {
+  sapply(x, function(y) if (y < 0) sprintf(" %s", y) else as.character(y))
+}
+
+# Create initial plot to determine text range
+ggplot(combined_df, aes(x = rank, y = stat.mean, fill = category)) +
+  geom_bar(data = subset(combined_df, direction == "positive"), aes(y = stat.mean), stat = "identity") +
+  geom_bar(data = subset(combined_df, direction == "negative"), aes(y = stat.mean), stat = "identity") +
+  scale_y_continuous(labels = label_format, position = "right", limits = c(-7, 7), breaks = c(-6,-4,-2,0,2,4,6)) + 
+  coord_flip() +
+  scale_fill_manual(values = category_colors) +  # Remove legend
+  theme_minimal() +
+  labs(
+    title = "WT versus TWEAK",
+    x = NULL,  # Remove x axis label
+    y = 'Stat.mean'
+  ) +
+  theme(
+    text=element_text(family= font),
+    axis.text.y = element_blank(),
+    axis.text.x = element_text(color = "black"),
+    plot.title = element_text(hjust = 0.5, color = "black", size = 25, face = 'bold'),
+    panel.grid.major.y = element_blank(),  # Remove horizontal grid lines
+    panel.grid.minor.y = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    axis.title.x = element_text(hjust = 0.5, color = "black", size = 20),
+    axis.title.y = element_blank(),  # Remove y axis text
+    axis.line.x.top = element_line(size = 1.5),  # Add x-axis line on top
+    axis.ticks.x.top = element_line(color = "black", size = 1.5),  # Add x-axis ticks on top
+    axis.ticks.length = unit(0.3, "cm"),
+    legend.position = c(0.25, 0.3),  # Position legend using coordinates
+    legend.background = element_rect(fill = alpha('white', 0.5)), # Adjust tick length if necessary
+    legend.key.size = unit(1, 'cm'), # Increase the size of the legend keys
+    legend.title = element_blank(),
+    legend.text = element_text(size = 13) 
+  ) +
+  geom_text(aes(label = ifelse(direction == "positive", significance, ""), y = stat.mean), hjust = -0.2, color = "black", size = 7) +
+  geom_text(aes(label = ifelse(direction == "negative", significance, ""), y = stat.mean), hjust = 1.5, color = "black", size = 7) +
+  scale_x_reverse() +  # Invert the plot vertically
+  geom_hline(yintercept = 0, color = "black", linetype = "solid", size = 1.5) +
+  annotate("text", x = combined_df$rank[combined_df$direction == "positive"], 
+           y = combined_df$stat.mean[combined_df$direction == "positive"] + nudge_distance, 
+           label = combined_df$pathway[combined_df$direction == "positive"], 
+           hjust = 0, color = "black", size = 4.5, family = font) +
+  
+  annotate("text", x = combined_df$rank[combined_df$direction == "negative"], 
+           y = combined_df$stat.mean[combined_df$direction == "negative"] - nudge_distance, 
+           label = combined_df$pathway[combined_df$direction == "negative"], 
+           hjust = 1, color = "black", size = 4.5, family = font)
+
+ggsave(paste0(output_dir_gage, "/GAGEPathwayOverview_", experiment_setup , ".svg"), width = 10, height = 10)
+```
+Generates gene overview for upregulated pathways
+
+```{r}
+gs=unique(unlist(kegg.gs[rownames(Table.kegg.p$greater)[1:25]]))
+essData=essGene(gs, gagedf_filtered, ref = WT_REF, samp = EXP_REF)
+
+col_names <- colnames(essData)
+
+# Function to rename column names dynamically with explicit WT and EXP variables
+rename_columns <- function(col_names, WT = WT, EXP = EXP) {
+  # Use sub to extract E1 or E2 and detect either WT or EXP dynamically based on input
+  renamed <- sapply(col_names, function(x) {
+    # Extract experiment number (E1 or E2)
+    exp_num <- sub(".*(E[1-2]).*", "\\1", x)
+    
+    # Detect whether the column belongs to WT or EXP based on the passed values
+    status <- ifelse(grepl(WT, x), WT, ifelse(grepl(EXP, x), EXP, ""))
+    
+    # Combine experiment number and status
+    paste(exp_num, status, sep = "_")
+  })
+  
+  return(renamed)
+}
+
+new_col_names <- rename_columns(col_names, WT = WT, EXP = EXP)
+colnames(essData) <- new_col_names
+
+get_column_indices <- function(col_names, WT = WT, EXP = EXP) {
+  # Get column indices for WT
+  WT_ref <- grep(WT, col_names)
+  
+  # Get column indices for EXP
+  EXP_ref <- grep(EXP, col_names)
+  
+  # Return both WT and EXP indices as a list
+  return(list(WT_ref = WT_ref, EXP_ref = EXP_ref))
+}
+
+column_names <- get_column_indices(col_names, WT = WT, EXP = EXP)
+WT_GAGE_REF <- column_names$WT_ref
+EXP_GAGE_REF <- column_names$EXP_ref
+
+rownorm <- gage:::rownorm
+
+geneData <- function (genes, exprs, ref = NULL, samp = NULL, outname = "array", 
+                      txt = TRUE, heatmap = FALSE, scatterplot = FALSE, samp.mean =                           FALSE, pdf.size = c(7, 7), cols = NULL, scale = "row", limit =                          NULL, label.groups = TRUE, translated_list, ...) 
+{
+  if (!is.null(ref) & is.null(samp)) 
+    samp = (1:ncol(exprs))[-ref]
+  if (is.null(ref) & !is.null(samp)) 
+    ref = (1:ncol(exprs))[-samp]
+  if (!is.null(ref) & !is.null(samp)) 
+    icol = c(ref, samp)
+  else icol = 1:ncol(exprs)
+  genes = cbind(genes)
+  sel = rownames(exprs) %in% genes[, 1]
+  if (sum(sel) < 2) {
+    print("The number of genes found in exprs is 0 or 1, no need to proceed")
+    return(invisible(1))
+  }
+  gData = cbind(exprs[sel, ])
+  if (ncol(genes) > 1) 
+    rownames(gData) = genes[match(rownames(gData), genes[, 1]), 2]
+  
+  # Translate Entrez IDs to gene symbols using translated_list
+  entrez_ids <- rownames(gData)
+  gene_symbols <- translated_list$SYMBOL[match(entrez_ids, translated_list$ENTREZID)]
+  
+  # Handle unmatched Entrez IDs
+  gene_symbols[is.na(gene_symbols)] <- entrez_ids[is.na(gene_symbols)]
+  rownames(gData) <- gene_symbols
+  
+  if (txt) {
+    filename = paste(outname, ".geneData.txt", sep = "")
+    cat("Gene\t", paste(colnames(gData[, icol]), collapse = "\t"), 
+        "\n", file = filename, sep = "")
+    write.table(gData[, icol], file = filename, sep = "\t", 
+                col.names = F, append = T)
+  }
+  if (heatmap & length(icol) > 1 & !is.null(ref) & !is.null(samp)) {
+    if (scale == "row") {
+      gData.h = rownorm(gData[, icol])
+    }
+    else if (scale == "column") {
+      gData.h = rownorm(t(gData[, icol]))
+    }
+    else gData.h = gData[, icol]
+    if (is.numeric(limit)) {
+      gData.h[gData.h > abs(limit)] = abs(limit)
+      gData.h[gData.h < -abs(limit)] = -abs(limit)
+    }
+    nc = round(max(abs(range(gData.h))) * 100) * 2
+    if (is.null(cols)) {
+      cols = colorRampPalette(c("#006199", "white", "#DA4948"))(nc)
+    }
+    breaks <- seq(min(gData.h, na.rm = TRUE), max(gData.h, na.rm = TRUE), length.out = length(cols) + 1)
+    pdf(paste(outname, ".geneData.heatmap.pdf", sep = ""), 
+        width = pdf.size[1], height = pdf.size[2])
+    if (label.groups & !is.null(ref) & !is.null(samp)) {
+      col.cols = c(rep("#006199", length(ref)), rep("#DA4948", length(samp)))
+      heatmap.2(gData.h, col = cols, scale = "none", symkey = TRUE, 
+                density.info = "none", trace = "none", ColSideColors = col.cols, 
+                key = FALSE, keysize = 1, key.title = "Color Key", key.xlab = "Expression Levels",
+                breaks = breaks, ...)
+    }
+    else {
+      heatmap.2(gData.h, col = cols, scale = "none", symkey = TRUE, 
+                density.info = "none", trace = "none", keysize = 1, 
+                key.title = "Color Key", key.xlab = "Expression Levels", 
+                breaks = breaks, ...)
+    }
+    dev.off()
+  }
+  if (scatterplot & !is.null(ref) & !is.null(samp)) {
+    pdf(paste(outname, ".geneData.pdf", sep = ""), width = pdf.size[1], 
+        height = pdf.size[2])
+    sc1 = 1.5
+    op = par(lwd = 2)
+    if (samp.mean) {
+      x = apply(gData[, ref], 1, mean, na.rm = T)
+      y = apply(gData[, samp], 1, mean, na.rm = T)
+      xlim = ylim = range(x, y)
+      plot(x, y, type = "p", pch = 19, xlab = "Control Mean", 
+           ylab = "Experiment Mean", xlim = xlim, ylim = ylim, 
+           cex = sc1, cex.axis = sc1, cex.lab = sc1, col = "#006199")
+      abline(0, 1)
+    }
+    else {
+      if (length(ref) > 1 & length(samp) > 1) {
+        xlim = ylim = range(gData[, ref[1:2]], gData[, 
+                                                     samp[1:2]])
+      }
+      else xlim = ylim = range(gData[, ref[1]], gData[, 
+                                                      samp[1]])
+      plot(gData[, ref[1]], gData[, samp[1]], type = "n", 
+           pch = 19, col = "gray", main = pathway_name ,xlab = "Control", ylab = "Experiment", 
+           xlim = xlim, ylim = ylim, cex = sc1, cex.axis = sc1, 
+           cex.lab = sc1)
+      abline(0, 1)
+      points(gData[, ref[1]], gData[, samp[1]], pch = 19, 
+             cex = sc1, col = "#006199")
+      if (length(ref) > 1 & length(samp) > 1) {
+        points(gData[, ref[2]], gData[, samp[2]], pch = 24, 
+               col = "#DA4948", cex = sc1)
+        legend("topleft", c("Distribution TWEAK/WT - S1", "Distribution TWEAK/WT - S2"), 
+               pch = c(19, 24), col = c("#006199", "#DA4948"), bty = "n", 
+               pt.cex = sc1)
+      }
+    }
+    par(op)
+    dev.off()
+  }
+  return(invisible(1))
+}
+
+for (gs in rownames(Table.kegg.p$greater)[1:25]) { 
+  
+  output_dir_gage_greater <- paste0(output_dir_gage, "/Greater/")
+  dir.create(output_dir_gage_greater)
+  
+  pathway_name <- sub("^hsa\\d+\\s*", "", gs)
+  outname = gsub(" |:|/", "_", substr(gs, 10, 100))
+  geneData(genes = kegg.gs[[gs]], exprs = essData, ref = WT_GAGE_REF,
+           samp = EXP_GAGE_REF, outname = paste0(output_dir_gage_greater, outname), txt = T, heatmap = T, scale = "row", samp.mean = F,
+           Colv = F, Rowv = F, dendrogram = "none", limit = 3, scatterplot = T, pdf.size = c(6, 6), margins = c(15,10),
+           translated_list = translated_list)
+}
+
+
+```
+
+Generates gene overview for upregulated pathways
+
+```{r}
+gs=unique(unlist(kegg.gs[rownames(Table.kegg.p$less)[1:10]]))
+essData=essGene(gs, gagedf_filtered, ref = WT_REF, samp = EXP_REF)
+
+col_names <- colnames(essData)
+
+new_col_names <- rename_columns(col_names, WT = WT, EXP = EXP)
+colnames(essData) <- new_col_names
+
+
+for (gs in rownames(Table.kegg.p$less)[1:10]) {
+  
+  output_dir_gage_lesser <- paste0(output_dir_gage, "/Lesser/")
+  dir.create(output_dir_gage_lesser)
+  
+  pathway_name <- sub("^hsa\\d+\\s*", "", gs)
+  outname = gsub(" |:|/", "_", substr(gs, 10, 100))
+  geneData(genes = kegg.gs[[gs]], exprs = essData, ref = WT_GAGE_REF,
+           samp = EXP_GAGE_REF, outname = paste0(output_dir_gage_lesser, outname), txt = T, heatmap = T, scale = "row", samp.mean = F,
+           Colv = F, Rowv = F, dendrogram = "none", limit = 3, scatterplot = T, pdf.size = c(6, 6), margins = c(15,10),
+           translated_list = translated_list)
+}
+```
+
+
+```{r}
+file_list <- list.files(path = output_dir_gage_greater, pattern = "\\.geneData.txt", full.names = TRUE)
+
+output_dir_gage_pathway <- paste0(output_dir_gage, "/Pathways/")
+  dir.create(output_dir_gage_pathway)
+
+process_gene_data <- function(file_path) {
+  Table_Gene_Data <- read.table(file_path, header = TRUE, sep = "\t")
+  
+  # Identify experiment columns
+  exp_cols <- grep("^E[0-9]+_", colnames(Table_Gene_Data))
+  exp_names <- unique(sub("_.*", "", colnames(Table_Gene_Data)[exp_cols]))
+  
+  # Create difference columns
+  for (exp in exp_names) {
+    wt_col <- grep(paste0("^", exp, "_WT$"), colnames(Table_Gene_Data))
+    exp_col <- grep(paste0("^", exp, "_(?!WT)"), colnames(Table_Gene_Data), perl = TRUE)
+    
+    if (length(wt_col) == 1 && length(exp_col) == 1) {
+      diff_col_name <- paste0(exp, "_Dif")
+      Table_Gene_Data[[diff_col_name]] <- Table_Gene_Data[[exp_col]] - Table_Gene_Data[[wt_col]]
+    }
+  }
+  
+  # Calculate average value
+  diff_cols <- grep("_Dif$", colnames(Table_Gene_Data))
+  Table_Gene_Data$Average_Value <- rowMeans(Table_Gene_Data[, diff_cols, drop = FALSE])
+  
+  # Use gene names directly from 'Gene' column
+  Table_Gene_Data$SYMBOL <- Table_Gene_Data$Gene
+  
+  plot_title <- paste0(sub("\\..*", "", basename(file_path)), "\nDifferential Gene Expression")
+  
+  num_outliers <- min(15, nrow(Table_Gene_Data))
+  Top_Outliers <- Table_Gene_Data[order(abs(Table_Gene_Data$Average_Value), decreasing = TRUE),][1:num_outliers,]
+  
+  plot_height <- max(0, min(15, nrow(Table_Gene_Data)) * 0.3)
+  
+  min_value <- floor(min(Top_Outliers$Average_Value) * 2) / 2
+  max_value <- ceiling(max(Top_Outliers$Average_Value) * 2) / 2
+  y_intercepts <- seq(from = min_value, to = max_value, by = 0.5)
+  
+  font = 'Bahnschrift'
+  
+  p <- ggplot(Top_Outliers, aes(x = reorder(SYMBOL, Average_Value), y = Average_Value)) +
+    scale_y_continuous(position = "right", limits = c(-2, 2), breaks = c(-2,-1,0,1,2)) +
+    geom_bar(stat = "identity", position = "dodge", aes(fill = Average_Value > 0)) +
+    scale_fill_manual(values = c("#2381D0", "#DA4948")) +
+    theme(
+      text = element_text(family = font),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.grid.major.x = element_line('grey', size = 0.2),
+      panel.grid.minor.y = element_blank(),
+      panel.background = element_rect(fill = "white"),
+      axis.line = element_line(color = "black", size = 0.5),
+      plot.title = element_text(hjust = 0.5, size = 15, face = 'bold')
+    ) +
+    geom_hline(yintercept = y_intercepts, color = "grey", linetype = "dashed", size = 0.2, inherit.aes = FALSE) +
+    labs(title = plot_title, x = "Genes", y = "Stat.Mean") +
+    coord_flip() +
+    theme(legend.position = "none")
+  
+  file_name <- paste0(output_dir_gage_pathway, basename(file_path), "_Differential_Plot.svg")
+  ggsave(file_name, plot = p, scale = 1, width = 5, height = plot_height, units = "in", dpi = 300)
+  
+  return(p)
+}
+
+# Process all files in the list
+plots <- lapply(file_list, process_gene_data)
+
+file_list <- list.files(path = output_dir_gage_lesser, pattern = "\\.geneData.txt", full.names = TRUE)
+
+plots <- lapply(file_list, process_gene_data)
+```

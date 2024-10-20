@@ -6,18 +6,7 @@ output: html_document
 ---
 
 ```{r}
-# # install from BioConductor
-# if(!requireNamespace("devtools", quietly = TRUE))
-#     install.packages("devtools")
-# 
-# if(!requireNamespace("BiocManager", quietly = TRUE))
-#     install.packages("BiocManager")
-# 
-# BiocManager::install(c("gage", "gageData", "affy", "oligo", "oligoData", "statmod", "limma", "pdInfoBuilder", "affycoretools", "pd.clariom.s.human"))
-```
-
-```{r}
-#If this is your first time running the script re initiate the renv environment
+#If this is your first time running any of the Microarray_Analysis.RProj scripts reinitiate the renv environment
 
 #renv::restore()
 ```
@@ -37,7 +26,7 @@ library(RColorBrewer)
 ```{r}
 #Input directory for Cel files
 input_dir = "D:/Microarray_Data"
-celFiles <- list.celfiles(inputs_dir, full.names=TRUE)
+celFiles <- list.celfiles(input_dir, full.names=TRUE)
 rawData <- read.celfiles(celFiles)
 sns <- sampleNames(rawData)
 
@@ -253,5 +242,6 @@ MD.plot <- function(ppData) {
 
 MD.plot(ppData)
 
+saveRDS(ppData, file = paste0(output_dir, "/Processed_Microarray_Data.rds"))
 write.exprs(ppData, file = paste0(output_dir, "/QCProcessed_Microarray_Data.txt"))
 ```
