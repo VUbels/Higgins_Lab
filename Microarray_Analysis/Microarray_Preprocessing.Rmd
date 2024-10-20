@@ -1,0 +1,257 @@
+---
+title: "Microarray_Preprocessing"
+author: "Victor Ubels"
+date: "2024-10-19"
+output: html_document
+---
+
+```{r}
+# # install from BioConductor
+# if(!requireNamespace("devtools", quietly = TRUE))
+#     install.packages("devtools")
+# 
+# if(!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# 
+# BiocManager::install(c("gage", "gageData", "affy", "oligo", "oligoData", "statmod", "limma", "pdInfoBuilder", "affycoretools", "pd.clariom.s.human"))
+```
+
+```{r}
+#If this is your first time running the script re initiate the renv environment
+
+#renv::restore()
+```
+
+```{r}
+library(affy)
+library(oligo)
+library(statmod)
+library(limma)
+library(pd.clariom.s.human)
+library(oligoData)
+library(affycoretools)
+library(ggplot2)
+library(RColorBrewer)
+```
+
+```{r}
+#Input directory for Cel files
+input_dir = "D:/Microarray_Data"
+celFiles <- list.celfiles(inputs_dir, full.names=TRUE)
+rawData <- read.celfiles(celFiles)
+sns <- sampleNames(rawData)
+
+#Set output folder for results
+
+output_dir = paste0(input_dir, "/Preprocessing")
+dir.create(output_dir)
+
+
+#Verify reference chip set is correctly loaded
+chipset <- "Clariom.S.Human"
+pd.clariom.s.human
+
+###Constructing your info dataframe depends entirely on your sns variable which contains your Cel file names
+
+#Wafer for chip batch information.
+#Experiment for experiment batch
+#Complex for experimental variables
+
+#Example, 2302_E1_WT.CEL is Wafer (2302) Experiment (E1) Complex (WT) thus the following substrings are set through:
+wafer <- substr(sns, 1, 4)
+experiment <- substr(sns, 6, 7)
+complex <- substr(sns, 9, 10)
+
+#Custom colour scheme because oligo is aweful, feel free to play around/comment out this for easier time. Needs to be at equal to N samples.
+custom_colors <- c("#DA4948", "#006199", "#60B8AA", "#B8B2E9")
+```
+
+```{r}
+info <- data.frame(wafer=wafer, experiment=experiment, complex=complex)
+
+rownames(info) <- sns
+
+metadata <- data.frame(labelDescription=c('wafer', 'experiment', 'complex'), channel= "ALL")
+sampleNames(rawData) <- sns
+
+pd <- new('AnnotatedDataFrame', data=info, varMetadata=metadata)
+phenoData(rawData) <- pd
+
+unique_conditions <- unique(complex)
+unique_conditions <- sort(unique_conditions)
+condition_string <- paste(unique_conditions, collapse = "_vs_")
+
+rm(tmp, wafer, experiment, pd, metadata)
+rawData
+complex <- as.factor(rawData$complex)
+```
+
+```{r}
+# Click return in the actual console to see this data, otherwise can skip it
+#image(rawData, transfo=log2)
+```
+
+```{r}
+pdf(paste0(output_dir, "/MVAPlot_" , condition_string,".pdf"), width = 5, height = 4)
+MAplot(rawData, pairs=TRUE, plotFun=smoothScatter, main = "MVA plot")
+dev.off()
+
+pdf(paste0(output_dir, "/Relative_MVAPlot_", condition_string, ".pdf"), width = 4, height = 4)
+MAplot(rawData, groups=complex, which=1, main = "Relative MVA plot", cex = 1, lwd = 1.5, lty = 1.5)
+dev.off()
+
+pdf(paste0(output_dir, "/Raw_Expression_Profile.pdf"), width = 4, height = 4)
+par(mar = c(8, 3, 2, 2))
+boxplot(rawData, which=c("pm"), transfo=log2, nsample=10000, las = 2, boxwex = .8, varwidth = TRUE, col = custom_colors, main = "Raw Expression Profile")
+dev.off()
+
+pdf(paste0(output_dir, "/Density_Estimate_", condition_string, ".pdf"), width = 4, height = 4)
+hist(rawData, which=c("pm"), transfo=log2, nsample=10000, main = paste0("Density Estimate ", condition_string))
+dev.off()
+```
+
+```{r}
+pmSeq <- pmSequence(rawData)
+pmSeq[1:5]
+
+pmsLog2 <- log2(pm(rawData))
+coefs <- getAffinitySplineCoefficients(pmsLog2, pmSeq)
+```
+
+```{r}
+GenerateSequence.plot <- function(coefs, probeLength = 25) {
+   
+   # Check the number of columns in coefs
+   num_columns <- ncol(coefs)
+   
+   # Get column names of coefs for dynamic titles
+   column_names <- colnames(coefs)
+   
+   # Loop over each column
+   for (i in 1:num_columns) {
+     
+     # Extract the coefficients for the current column
+     coefs_current <- coefs[, i]
+     
+     # Dynamically create the PDF file name based on column name
+     pdf_filename <- paste0(output_dir, "/Sequence_Effect_", column_names[i], ".pdf")
+     
+     # Open PDF device to save the plot
+     pdf(file = pdf_filename, width = 3.5, height = 3.5)
+     
+     # Create the plot using getBaseProfile
+     getBaseProfile(
+       coefs = coefs_current, 
+       probeLength = probeLength, 
+       plot = TRUE, 
+       type = "l", 
+       xlab = "Base Position", 
+       ylab = "Effect", 
+       main = paste("Effect of", column_names[i])
+)
+   
+# Close the PDF device after the plot is made
+dev.off()
+
+  }
+}
+
+GenerateSequence.plot(coefs)
+sample_num <- ncol(coefs)
+```
+
+```{r}
+fit <- fitProbeLevelModel(rawData)
+
+coef(fit)[1:sample_num, 1:sample_num]
+se(fit)[1:sample_num, 1:sample_num]
+
+
+pdf(paste0(output_dir, "/RLE_Boxplot.pdf"), width = 4, height = 4)
+par(mar = c(8, 3, 2, 2))
+boxplot(fit, main="RLE Boxplot", col = custom_colors, las = 2, boxwex = .8, varwidth = TRUE)
+dev.off()
+```
+
+```{r}
+output_dir_chip = paste0(output_dir, "/ChipOverview")
+
+ChipInfo.plot <- function(fit, output_dir) {
+  # Ensure the output directory exists
+  dir.create(output_dir_chip, showWarnings = FALSE, recursive = TRUE)
+  
+  # Get sample names from the coefficients
+  sample_names <- colnames(coef(fit))
+  num_samples <- length(sample_names)
+  
+  # Define the types
+  types <- c("weights", "residuals", "pos.residuals", "neg.residuals", "sign.residuals")
+  
+  # Loop through each combination of sample and type
+  for (w in 1:num_samples) {
+    sample_name <- sample_names[w]
+    for (t in types) {
+      # Generate a filename
+      filename <- file.path(output_dir_chip, sprintf("%s_%s.pdf", sample_name, t))
+      
+      # Open PDF device
+      pdf(filename, width = 7, height = 7)
+      
+      # Create and print the plot
+      image(fit, which = w, type = c(t))
+      
+      # Close the PDF device
+      dev.off()
+      
+      cat(sprintf("Saved plot to %s\n", filename))
+    }
+  }
+}
+
+ChipInfo.plot(fit)
+```
+
+```{r}
+ppData <- rma(rawData, background=TRUE, normalize=TRUE)
+class(ppData)
+
+pdf(paste0(output_dir, "/RMA_Expression_Profile.pdf"), width = 4, height = 4)
+par(mar = c(8, 3, 2, 2))
+boxplot(ppData, main = "Expression Profile Background Corrected", col = custom_colors, las = 2, boxwex = .8, varwidth = TRUE)
+dev.off()
+
+pdf(paste0(output_dir, "/Density_Estimate_", condition_string, "_Post_RMA.pdf"), width = 4, height = 4)
+hist(ppData, transfo=identity, nsample=10000, main = paste("Density Estimate Post RMA"))
+dev.off()
+```
+
+```{r}
+MD.plot <- function(ppData) {
+  # Get the number of rows in ppData@phenoData@data
+  num_rows <- nrow(ppData@phenoData@data)
+  
+  # Loop through each row
+  for (n in 1:num_rows) {
+    # Extract chipset, complex_id, and experiment_id from the current row
+    chipset <- ppData@phenoData@data[n, 1]
+    complex_id <- ppData@phenoData@data[n, 3]
+    experiment_id <- ppData@phenoData@data[n, 2]
+    
+    # Create the plot title
+    plot_title <- paste(chipset, complex_id, experiment_id)
+    
+    # Generate the plot
+    pdf(paste0(output_dir, "/", chipset, "_" , complex_id, "_", experiment_id, ".pdf"), width = 4, height = 4)
+    plotMD(ppData, column = n, main = plot_title)
+    dev.off()
+    
+    # Optional: add a pause or save the plot if needed
+    # Sys.sleep(1)  # Pause for 1 second between plots
+    # You might want to save each plot to a file here
+  }
+}
+
+MD.plot(ppData)
+
+write.exprs(ppData, file = paste0(output_dir, "/QCProcessed_Microarray_Data.txt"))
+```
