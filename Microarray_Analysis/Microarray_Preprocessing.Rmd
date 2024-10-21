@@ -8,7 +8,7 @@ output: html_document
 ```{r}
 #If this is your first time running any of the Microarray_Analysis.RProj scripts reinitiate the renv environment
 
-#renv::restore()
+renv::restore()
 ```
 
 ```{r}
