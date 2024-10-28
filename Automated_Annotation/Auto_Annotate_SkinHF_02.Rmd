@@ -36,6 +36,7 @@ DimPlot(seurat_obj_merged, label = TRUE, split.by = 'diseaseStatus')
 
 if (exists("idents_drop") && length(idents_drop) > 0) {
   seurat_obj_merged <- subset(seurat_obj_merged, idents = idents_drop, invert = TRUE)
+  seurat_obj_merged@meta.data$Clusters <- droplevels(seurat_obj_merged@meta.data$Clusters)
 }
 ```
 
