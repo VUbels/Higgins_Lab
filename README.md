@@ -13,6 +13,7 @@
 |CellRank_Pipeline|Py|scRNA|![Linux](./Assets/icon_linux.png)
 
 > [!TIP]
+**Pipeline quick summarization:**
 
 * Automated_Annotation: Pseudo-automated annotation of Hair/Skin scRNA datasets using Adjusted Iterative Latent Semantic Idexing (LSI). Requires MTX, H5, 10x as input.
 
