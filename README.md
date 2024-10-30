@@ -1,6 +1,6 @@
 # Higgins_Lab
 
-Automated scRNA/scATAC/RNA/Microarray analysis pipelines. Each folder contains an individual pipeline with dedicated Renvironments/Python virtual environments to ensure compatability independent of the user.
+Automated scRNA/scATAC/RNA/Microarray analysis pipelines. Each folder contains an individual pipeline with dedicated Renvironments/Python virtual environments to ensure compatability.
 
 * Automated_Annotation: Pseudo-automated annotation of Hair/Skin scRNA datasets using Adjusted Iterative Latent Semantic Idexing (LSI). Requires MTX, H5, 10x as input.
 
