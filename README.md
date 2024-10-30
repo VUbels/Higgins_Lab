@@ -22,14 +22,14 @@ Automated scRNA/scATAC/RNA/Microarray analysis pipelines. Each folder contains a
 > [!IMPORTANT]
 >**Important prerequisites:**
 
->-Download and install R (4.3.2+): https://www.r-project.org/
+Download and install R (4.3.2+): https://www.r-project.org/
 
->-Download and install RTools (4.3+): https://cran.r-project.org/bin/windows/Rtools/
+Download and install RTools (4.3+): https://cran.r-project.org/bin/windows/Rtools/
 
->-Download and install RStudio (3.3+): https://posit.co/download/rstudio-desktop/
+Download and install RStudio (3.3+): https://posit.co/download/rstudio-desktop/
 
->-Download and install Python (3.11+): https://www.python.org/downloads/
+Download and install Python (3.11+): https://www.python.org/downloads/
 
->-Download and install Microsoft C++ Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+Download and install Microsoft C++ Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
 
->(In the Visual Studio Installer make sure to highlight the Desktop development with C++ and from Individual Components the Windows 11 or Windows 10 SDK)
+(In the Visual Studio Installer make sure to highlight the Desktop development with C++ and from Individual Components the Windows 11 or Windows 10 SDK)
