@@ -2,21 +2,21 @@
 
 Automated scRNA/scATAC/RNA/Microarray analysis pipelines. Each folder contains an individual pipeline with dedicated Renvironments/Python virtual environments to ensure compatability independent of the user.
 
--Automated_Annotation: Pseudo-automated annotation of Hair/Skin scRNA datasets using Adjusted Iterative Latent Semantic Idexing (LSI). Requires MTX, H5, 10x as input.
+* Automated_Annotation: Pseudo-automated annotation of Hair/Skin scRNA datasets using Adjusted Iterative Latent Semantic Idexing (LSI). Requires MTX, H5, 10x as input.
 
--Microarray_Analysis: Simple automated Microarray/RNA preprocessing and analysis using Oligo and GAGE. Requires Microarray (CEL) or batch RNA seq as input.
+* Microarray_Analysis: Simple automated Microarray/RNA preprocessing and analysis using Oligo and GAGE. Requires Microarray (CEL) or batch RNA seq as input.
 
--CellChat_Single: infers intercellular communication. Runs a standard CellChat pipeline on a single annotated scRNA dataset. Requires Seurat object as input.
+* CellChat_Single: infers intercellular communication. Runs a standard CellChat pipeline on a single annotated scRNA dataset. Requires Seurat object as input.
 
--CellChat_Comparison: infers intercellular communication. Runs a comparison CellChat pipeline between multiple scRNA datasets. Requires Seurat object(s) as input.
+* CellChat_Comparison: infers intercellular communication. Runs a comparison CellChat pipeline between multiple scRNA datasets. Requires Seurat object(s) as input.
 
--SIGNET_Pipeline: Infers intracellular communication. Runs a SIGNET pipeline to establish transcriptional network using MLP training model. Requires raw expression matrix as input.
+* SIGNET_Pipeline: Infers intracellular communication. Runs a SIGNET pipeline to establish transcriptional network using MLP training model. Requires raw expression matrix as input.
 
--scATAC_Pipeline: Uses ArchR and Cicero to generate GRNs for the purpose of CellOracle pertubartion analysis. Can modify ArchR to annotate scATAC data easily.
+* scATAC_Pipeline: Uses ArchR and Cicero to generate GRNs for the purpose of CellOracle pertubartion analysis. Can modify ArchR to annotate scATAC data easily.
 
--CellOracle_Pipeline: Uses CellOracle and customizable GRNs from scATAC_Pipeline to perform gene perturbation analysis on scRNA dataset to track lineage changes.
+* CellOracle_Pipeline: Uses CellOracle and customizable GRNs from scATAC_Pipeline to perform gene perturbation analysis on scRNA dataset to track lineage changes.
 
--CellRank_Pipeline: Uses Palentir pseudotime and CellRank for Unified fate mapping in multiview single-cell data
+* CellRank_Pipeline: Uses Palentir pseudotime and CellRank for Unified fate mapping in multiview single-cell data
 
 
 > [!IMPORTANT]
