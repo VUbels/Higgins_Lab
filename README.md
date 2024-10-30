@@ -5,14 +5,14 @@
 ### Recall scope definitions
 |Pipeline|Language|Data Type|OS|
 |---|---|---|---|
-|Automated_Annotation|R/Py(Reticulate)|scRNA|![Windows](./Assets/icon_windows.png)![Linux](./Assets/icon_linux.png)![iOS](./Assets/icon_ios.png)
-|Microarray_Analysis|R|Microarray/Bulk RNA|
-|CellChat_Single|R/Py(Reticulate)|scRNA|
-|CellChat_Comparison|R/Py(Reticulate)|scRNA|
-|SIGNET_Pipeline|Py|scRNA|
-|scATAC_Pipeline|R|scATAC|
-|CellOracle_Pipeline|Py|scRNA/scATAC|
-|CellRank_Pipeline|Py|scRNA|
+|Automated_Annotation|R/Py(Reticulate)|scRNA|![Windows](./Assets/icon_windows.png)![Linux](./Assets/icon_linux.png)![iOS](./Assets/icon_apple.png)
+|Microarray_Analysis|R|Microarray/Bulk RNA|![Windows](./Assets/icon_windows.png)![Linux](./Assets/icon_linux.png)![iOS](./Assets/icon_apple.png)
+|CellChat_Single|R/Py(Reticulate)|scRNA|![Windows](./Assets/icon_windows.png)![Linux](./Assets/icon_linux.png)![iOS](./Assets/icon_apple.png)
+|CellChat_Comparison|R/Py(Reticulate)|scRNA|![Windows](./Assets/icon_windows.png)![Linux](./Assets/icon_linux.png)![iOS](./Assets/icon_apple.png)
+|SIGNET_Pipeline|Py|scRNA|![Windows](./Assets/icon_windows.png)![Linux](./Assets/icon_linux.png)![iOS](./Assets/icon_apple.png)
+|scATAC_Pipeline|R|scATAC|![Linux](./Assets/icon_linux.png)
+|CellOracle_Pipeline|Py|scRNA/scATAC|![Linux](./Assets/icon_linux.png)
+|CellRank_Pipeline|Py|scRNA|![Linux](./Assets/icon_linux.png)
 
 
 * Automated_Annotation: Pseudo-automated annotation of Hair/Skin scRNA datasets using Adjusted Iterative Latent Semantic Idexing (LSI). Requires MTX, H5, 10x as input.
