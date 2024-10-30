@@ -2,6 +2,19 @@
 
 ## Automated scRNA/scATAC/RNA/Microarray analysis pipelines. Each folder contains an individual pipeline with dedicated **REnv/Conda** (renv or yaml) environments to ensure compatability.
 
+### Recall scope definitions
+|Pipeline|Language|Data Type|OS|
+|---|---|---|---|
+|Automated_Annotation|R/Py(Reticulate)|scRNA|Windows/
+|Microarray_Analysis|R|Microarray/Bulk RNA|
+|CellChat_Single|R/Py(Reticulate)|scRNA|
+|CellChat_Comparison|R/Py(Reticulate)|scRNA|
+|SIGNET_Pipeline|Py|scRNA|
+|scATAC_Pipeline|R|scATAC|
+|CellOracle_Pipeline|Py|scRNA/scATAC|
+|CellRank_Pipeline|Py|scRNA|
+
+
 * Automated_Annotation: Pseudo-automated annotation of Hair/Skin scRNA datasets using Adjusted Iterative Latent Semantic Idexing (LSI). Requires MTX, H5, 10x as input.
 
 * Microarray_Analysis: Simple automated Microarray/RNA preprocessing and analysis using Oligo and GAGE. Requires Microarray (CEL) or batch RNA seq as input.
