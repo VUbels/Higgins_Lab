@@ -1,4 +1,4 @@
-# Higgins_Lab - Automated scRNA/scATAC/RNA/Microarray analysis pipelines.
+# Higgins-Lab - Automated scRNA/scATAC/RNA/Microarray analysis pipelines.
 
 ### Each folder contains an individual pipeline with dedicated **REnv/Conda** (renv or yaml) environments to ensure compatability.
 |Pipeline|Language|Data Type|OS|
