@@ -20,7 +20,7 @@
 
 
 > [!IMPORTANT]
->**Important prerequisites:**
+>**Important minimum prerequisites:**
 
 Download and install R (4.3.2+): https://www.r-project.org/
 
