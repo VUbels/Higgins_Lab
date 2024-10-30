@@ -1,8 +1,6 @@
 # Higgins_Lab
 
 ## Automated scRNA/scATAC/RNA/Microarray analysis pipelines. Each folder contains an individual pipeline with dedicated **REnv/Conda** (renv or yaml) environments to ensure compatability.
-
-### Recall scope definitions
 |Pipeline|Language|Data Type|OS|
 |---|---|---|---|
 |Automated_Annotation|R/Py(Reticulate)|scRNA|![Windows](./Assets/icon_windows.png)![Linux](./Assets/icon_linux.png)![iOS](./Assets/icon_apple.png)
