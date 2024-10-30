@@ -18,16 +18,18 @@ Automated scRNA/scATAC/RNA/Microarray analysis pipelines. Each folder contains a
 
 -CellRank_Pipeline: Uses Palentir pseudotime and CellRank for Unified fate mapping in multiview single-cell data
 
-**Important prerequisites:**
 
--Download and install R (4.3.2+): https://www.r-project.org/
+> [!IMPORTANT]
+>**Important prerequisites:**
 
--Download and install RTools (4.3+): https://cran.r-project.org/bin/windows/Rtools/
+>-Download and install R (4.3.2+): https://www.r-project.org/
 
--Download and install RStudio (3.3+): https://posit.co/download/rstudio-desktop/
+>-Download and install RTools (4.3+): https://cran.r-project.org/bin/windows/Rtools/
 
--Download and install Python (3.11+): https://www.python.org/downloads/
+>-Download and install RStudio (3.3+): https://posit.co/download/rstudio-desktop/
 
--Download and install Microsoft C++ Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+>-Download and install Python (3.11+): https://www.python.org/downloads/
 
-(In the Visual Studio Installer make sure to highlight the Desktop development with C++ and from Individual Components the Windows 11 or Windows 10 SDK)
+>-Download and install Microsoft C++ Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+
+>(In the Visual Studio Installer make sure to highlight the Desktop development with C++ and from Individual Components the Windows 11 or Windows 10 SDK)
