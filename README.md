@@ -1,6 +1,4 @@
-# Higgins_Lab
-
-## Automated scRNA/scATAC/RNA/Microarray analysis pipelines.
+# Higgins_Lab - Automated scRNA/scATAC/RNA/Microarray analysis pipelines.
 
 ### Each folder contains an individual pipeline with dedicated **REnv/Conda** (renv or yaml) environments to ensure compatability.
 |Pipeline|Language|Data Type|OS|
@@ -46,3 +44,7 @@ Download and install Python (3.11+): https://www.python.org/downloads/
 Download and install Microsoft C++ Build Tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
 
 (In the Visual Studio Installer make sure to highlight the Desktop development with C++ and from Individual Components the Windows 11 or Windows 10 SDK)
+
+For iOS users:
+
+Download and install XQuartz https://www.xquartz.org/
