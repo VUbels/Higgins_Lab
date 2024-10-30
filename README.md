@@ -5,7 +5,7 @@
 ### Recall scope definitions
 |Pipeline|Language|Data Type|OS|
 |---|---|---|---|
-|Automated_Annotation|R/Py(Reticulate)|scRNA|!(./Assets/icon_windows.png)
+|Automated_Annotation|R/Py(Reticulate)|scRNA|![Windows](./Assets/icon_windows.png)
 |Microarray_Analysis|R|Microarray/Bulk RNA|
 |CellChat_Single|R/Py(Reticulate)|scRNA|
 |CellChat_Comparison|R/Py(Reticulate)|scRNA|
