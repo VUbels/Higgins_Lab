@@ -8,6 +8,7 @@
 |CellChat_Single|R/Py(Reticulate)|scRNA|![Windows](./Assets/icon_windows.png)![Linux](./Assets/icon_linux.png)![iOS](./Assets/icon_apple.png)
 |CellChat_Comparison|R/Py(Reticulate)|scRNA|![Windows](./Assets/icon_windows.png)![Linux](./Assets/icon_linux.png)![iOS](./Assets/icon_apple.png)
 |SIGNET_Pipeline|Py|scRNA|![Windows](./Assets/icon_windows.png)![Linux](./Assets/icon_linux.png)![iOS](./Assets/icon_apple.png)
+|Alignment_Pipeline|Py|RNA/scRNA|![Linux](./Assets/icon_linux.png)
 |scATAC_Pipeline|R|scATAC|![Linux](./Assets/icon_linux.png)
 |CellOracle_Pipeline|Py|scRNA/scATAC|![Linux](./Assets/icon_linux.png)
 |CellRank_Pipeline|Py|scRNA|![Linux](./Assets/icon_linux.png)
