@@ -16,6 +16,8 @@
 > [!TIP]
 **Pipeline quick summarization:**
 
+* Alignment_Pipeline: Simple python script with environment to align raw sequence data. Requires FASTQ files as input.
+
 * Automated_Annotation: Pseudo-automated annotation of Hair/Skin scRNA datasets using Adjusted Iterative Latent Semantic Idexing (LSI). Requires MTX, H5, 10x as input.
 
 * Microarray_Analysis: Simple automated Microarray/RNA preprocessing and analysis using Oligo and GAGE. Requires Microarray (CEL) or batch RNA seq as input.
