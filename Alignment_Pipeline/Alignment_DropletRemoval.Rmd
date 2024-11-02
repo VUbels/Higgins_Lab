@@ -68,7 +68,7 @@ process_scRNA_folder <- function(input_folder) {
   post_filter_dims <- dim(filt_matrix)
   
   # Save filtered matrix, genes, and barcodes
-  output_folder <- file.path(input_folder, "counts_filtered")
+  output_folder <- file.path(input_folder, "counts_filtered_droplet_removed")
   dir.create(output_folder, recursive = TRUE, showWarnings = FALSE)
   
   writeMM(filt_matrix, file.path(output_folder, "filtered_cells_x_genes.mtx"))
