@@ -1,4 +1,4 @@
-This script automates the alignment of scRNA-seq fastq files using kb count. It processes multiple subfolders in an input directory and saves the results to a specified output directory. Optionally, the script can build reference files using kb ref. Run Alignment_DropletRemoval if filter is not used and/or droplet based sequencing techniquen is used. 
+This script automates the alignment of scRNA-seq fastq files using kb count. It processes multiple subfolders in an input directory and saves the results to a specified output directory. Optionally, the script can build reference files using kb ref. Run Alignment_DropletRemoval if filter is not used and/or droplet based sequencing technique is used. 
 
 Usage
 
