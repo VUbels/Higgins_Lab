@@ -1,0 +1,100 @@
+---
+title: "Alignment_QC"
+author: "Victor Ubels"
+date: "2024-11-02"
+output: html_document
+---
+
+Only run this file when running droplet based sequence files. If Filter = FALSE during alignment_kallisto.sh you can specify FDR_Cutoff. Otherwise Kallisto filtering tends to be more strict than this approach.
+
+```{r}
+library(Matrix)
+library(dplyr)
+library(ggplot2)
+library(DropletUtils)
+library(tibble)
+
+renv::snapshot(type = 'all')
+
+input_folder <- "/mnt/f/scRNA_Aligned"
+FDR_Cutoff = 0.05
+```
+
+```{r}
+process_scRNA_folder <- function(input_folder) {
+  # Define input paths
+  matrix_path <- file.path(input_folder, "counts_unfiltered", "cells_x_genes.mtx")
+  genes_path <- file.path(input_folder, "counts_unfiltered", "cells_x_genes.genes.names.txt")
+  barcodes_path <- file.path(input_folder, "counts_unfiltered", "cells_x_genes.barcodes.txt")
+  
+  # Read the matrix, genes, and barcodes
+  raw_matrix <- readMM(matrix_path)
+  genes <- read.csv(genes_path, sep = "\t", header = FALSE)
+  barcodes <- read.csv(barcodes_path, sep = "\t", header = FALSE)
+  
+  # Transpose and assign row/col names
+  raw_matrix <- t(raw_matrix)
+  rownames(raw_matrix) <- genes[, 1]
+  colnames(raw_matrix) <- barcodes[, 1]
+  
+  # Calculate total UMI counts per barcode
+  tot_counts <- colSums(raw_matrix)
+  
+  # Create a tibble for plotting
+  df <- tibble(total = tot_counts,
+               rank = row_number(dplyr::desc(total))) %>%
+        distinct() %>%
+        arrange(rank)
+  
+  # Plot the rank-UMI count curve
+  plot_path <- file.path(input_folder, "counts_filtered", "rank_total_UMI_plot.png")
+  ggplot(df, aes(total, rank)) +
+    geom_path() +
+    scale_x_log10() +
+    scale_y_log10() +
+    annotation_logticks() +
+    labs(y = "Barcode rank", x = "Total UMI count")
+  
+  ggsave(plot_path, width = 6, height = 4)
+  
+  # Filter the matrix using emptyDrops
+  out <- emptyDrops(raw_matrix)
+  keep <- out$FDR <= FDR_Cutoff
+  keep[is.na(keep)] <- FALSE
+  filt_matrix <- raw_matrix[, keep]
+  
+  # Pre and post filtering dimensions
+  pre_filter_dims <- dim(raw_matrix)
+  post_filter_dims <- dim(filt_matrix)
+  
+  # Save filtered matrix, genes, and barcodes
+  output_folder <- file.path(input_folder, "counts_filtered")
+  dir.create(output_folder, recursive = TRUE, showWarnings = FALSE)
+  
+  writeMM(filt_matrix, file.path(output_folder, "filtered_cells_x_genes.mtx"))
+  write.table(genes, file.path(output_folder, "filtered_genes.txt"), row.names = FALSE, quote = FALSE, col.names = FALSE, sep = ",")
+  write.table(barcodes[keep, , drop = FALSE], file.path(output_folder, "filtered_barcodes.txt"), row.names = FALSE, quote = FALSE, col.names = FALSE, sep = ",")
+  
+  # Save pre and post filter dimensions
+  dimensions_file <- file.path(output_folder, "pre_post_filter_dimensions.txt")
+  writeLines(c(paste("Pre-filter dimensions:", paste(pre_filter_dims, collapse = " x ")),
+               paste("Post-filter dimensions:", paste(post_filter_dims, collapse = " x "))), con = dimensions_file)
+  
+  message(paste("Processed:", input_folder))
+}
+
+# Main loop function to iterate through each sequence folder
+process_all_folders <- function(base_folder) {
+  # List all sequence folders (e.g., HRR165455, HRR165456, etc.)
+  sequence_folders <- list.dirs(base_folder, recursive = FALSE)
+  
+  # Iterate through each folder and process it
+  for (seq_folder in sequence_folders) {
+    message(paste("Now applying filter and droplet removal for:", seq_folder))
+    process_scRNA_folder(seq_folder)
+  }
+}
+
+# Set input folder where all the sequence folders are located
+process_all_folders(input_folder)
+```
