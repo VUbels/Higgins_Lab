@@ -16,7 +16,7 @@
 > [!TIP]
 **Pipeline quick summarization:**
 
-* Alignment_Pipeline: Automated Kallisto sequence alignment. Contains R based Droplet removal for droplet-based sequence methods. Requires FASTQ files as input.
+* Alignment_Pipeline: Automated Kallisto|Bustools sequence alignment. Contains R based Droplet removal for droplet-based sequence methods. Requires FASTQ files as input.
 
 * Automated_Annotation: Pseudo-automated annotation of Hair/Skin scRNA datasets using Adjusted Iterative Latent Semantic Idexing (LSI). Requires MTX, H5, 10x as input.
 
