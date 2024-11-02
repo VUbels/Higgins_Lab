@@ -8,7 +8,7 @@
 |CellChat_Single|R/Py(Reticulate)|scRNA|![Windows](./Assets/icon_windows.png)![Linux](./Assets/icon_linux.png)![iOS](./Assets/icon_apple.png)
 |CellChat_Comparison|R/Py(Reticulate)|scRNA|![Windows](./Assets/icon_windows.png)![Linux](./Assets/icon_linux.png)![iOS](./Assets/icon_apple.png)
 |SIGNET_Pipeline|Py|scRNA|![Windows](./Assets/icon_windows.png)![Linux](./Assets/icon_linux.png)![iOS](./Assets/icon_apple.png)
-|Alignment_Pipeline|Py|RNA/scRNA|![Linux](./Assets/icon_linux.png)
+|Alignment_Pipeline|Py/R|RNA/scRNA|![Linux](./Assets/icon_linux.png)
 |scATAC_Pipeline|R|scATAC|![Linux](./Assets/icon_linux.png)
 |CellOracle_Pipeline|Py|scRNA/scATAC|![Linux](./Assets/icon_linux.png)
 |CellRank_Pipeline|Py|scRNA|![Linux](./Assets/icon_linux.png)
@@ -16,7 +16,7 @@
 > [!TIP]
 **Pipeline quick summarization:**
 
-* Alignment_Pipeline: Simple python script with environment to align raw sequence data. Requires FASTQ files as input.
+* Alignment_Pipeline: Automated Kallisto sequence alignment. Contains R based Droplet removal for droplet-based sequence methods. Requires FASTQ files as input.
 
 * Automated_Annotation: Pseudo-automated annotation of Hair/Skin scRNA datasets using Adjusted Iterative Latent Semantic Idexing (LSI). Requires MTX, H5, 10x as input.
 
