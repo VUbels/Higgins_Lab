@@ -22,7 +22,28 @@ Optional Parameters:
     -h: Display help message.
 
 ```
+Output example
 
+/mnt/f/scRNA_Aligned/
+│
+├── TEST/
+│   ├── counts_unfiltered/
+│   │   ├── cells_x_genes.mtx
+│   │   ├── genes.names.txt
+│   │   ├── cells_x_genes.genes.names.txt
+│   │   ├── barcodes.txt
+│   ├── counts_filtered/
+│   │   ├── cells_x_genes.mtx
+│   │   ├── genes.names.txt
+│   │   ├── cells_x_genes.genes.names.txt
+│   │   ├── barcodes.txt
+│   ├── counts_filtered_droplet_removed/
+│   │   ├── filtered_cells_x_genes.mtx
+│   │   ├── filtered_genes.names.txt
+│   │   ├── filtered_cells_x_genes.genes.names.txt
+│   │   ├── filtered_barcodes.txt
+│   │   ├── pre_post_filter_dimensions.txt
+│   │   ├── rank_total_UMI_plot.png
 
 
 ```
