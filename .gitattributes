@@ -40,6 +40,7 @@ report/* linguist-documentation
 
 # Optional: Mark Jupyter notebooks as generated if you want to exclude them from stats
 # *.ipynb linguist-generated
+# *.ipynb linguist-vendored
 
 # Optional: If you want to detect Jupyter notebooks but exclude HTML/PDF exports
 *.html linguist-generated
