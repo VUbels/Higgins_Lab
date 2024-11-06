@@ -2,8 +2,8 @@
 # This ensures GitHub's Linguist properly categorizes RMarkdown files
 
 # RMarkdown files
-*.Rmd linguist-language=R
-*.rmd linguist-language=R
+*.Rmd linguist-language=R linguist-detectable=true
+*.rmd linguist-language=R linguist-detectable=true
 
 # R script files (already detected by default, but included for completeness)
 *.R linguist-language=R
