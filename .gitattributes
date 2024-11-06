@@ -18,8 +18,8 @@ DESCRIPTION linguist-language=R
 NAMESPACE linguist-language=R
 
 # Jupyter Notebook files
-*.ipynb linguist-language=Python
-*.IPYNB linguist-language=Python
+#*.ipynb linguist-language=Python
+#*.IPYNB linguist-language=Python
 
 # Standard Python files (included for completeness)
 *.py linguist-language=Python
@@ -45,3 +45,4 @@ report/* linguist-documentation
 # Optional: If you want to detect Jupyter notebooks but exclude HTML/PDF exports
 *.html linguist-generated
 *.pdf linguist-generated
+*.ipynb linguist-generated
