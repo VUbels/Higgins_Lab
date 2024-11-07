@@ -21,6 +21,30 @@ Optional Parameters:
     -r: Build reference files using kb ref.
     -h: Display help message.
 
+List of supported single-cell technologies
+
+```
+short name       description
+----------       -----------
+10xv1            10x version 1 chemistry
+10xv2            10x version 2 chemistry
+10xv3            10x version 3 chemistry
+Bulk             Bulk RNA-seq
+SmartSeq2        Smart-seq2
+BDWTA            BD Rhapsody WTA
+CELSeq           CEL-Seq
+CELSeq2          CEL-Seq version 2
+DropSeq          DropSeq
+inDropsv1        inDrops version 1 chemistry
+inDropsv2        inDrops version 2 chemistry
+inDropsv3        inDrops version 3 chemistry
+SCRBSeq          SCRB-Seq
+SmartSeq3        Smart-seq3
+SPLiT-seq        SPLiT-seq
+SureCell         SureCell for ddSEQ
+Visium           10x Visium Spatial Transcriptomics
+```
+
 ```
 Output example
 
