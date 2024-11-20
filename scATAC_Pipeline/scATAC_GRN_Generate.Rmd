@@ -368,7 +368,7 @@ gene_anno$symbol <- gene_anno$gene_name
 ```
 
 ```{r}
-conns <- run_cicero(cicero_cds, sample_genome, sample_num = 2) 
+conns <- run_cicero(cicero_cds, sample_genome, sample_num = 100) 
 head(conns)
 saveRDS(conns, file = paste0(outputFolder, "/Cicero_Conns.RDS"))
 ```
