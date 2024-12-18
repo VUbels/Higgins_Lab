@@ -53,3 +53,4 @@ Download and install Microsoft C++ Build Tools: https://visualstudio.microsoft.c
 For iOS users:
 
 Download and install XQuartz https://www.xquartz.org/
+Download and install XCode https://developer.apple.com/xcode/
