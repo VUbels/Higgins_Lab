@@ -2456,3 +2456,118 @@ plotUMAP_Labels_columns <- function(df, dataType = "qualitative", cmap = NULL, c
   
   return(p)
 }
+
+
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+
+create_combined_dotplot <- function(subgroups, output_directory, custom_palette, featureSetsList) {
+  all_plots <- list()
+  plot_info <- list()
+  total_groups <- 0
+
+  # Process each subgroup
+  for (subgroup in subgroups) {
+    file_wd <- file.path(output_directory, "Clustering_04", subgroup, paste0(subgroup, ".rds"))
+    if (!file.exists(file_wd)) {
+      message(sprintf("File for subgroup '%s' not found. Skipping.", subgroup))
+      next
+    }
+    
+    obj <- readRDS(file_wd)
+    result <- process_subgroup(subgroup, obj, custom_palette, featureSetsList)
+    if (!is.null(result)) {
+      all_plots[[subgroup]] <- result$plot
+      plot_info[[subgroup]] <- list(n_genes = result$n_genes, n_groups = result$n_groups)
+      total_groups <- total_groups + result$n_groups
+    }
+  }
+
+  # Combine all plots into a single figure
+  if (length(all_plots) > 0) {
+    # Calculate the relative widths based on the number of groups in each subplot
+    relative_widths <- sapply(plot_info, function(x) x$n_groups)
+    
+    # Add legend to the rightmost plot
+    subgroup_names <- names(all_plots)
+    all_plots[[subgroup_names[length(subgroup_names)]]] <- all_plots[[subgroup_names[length(subgroup_names)]]] +
+      theme(
+        legend.position = "right",
+        legend.text = element_text(face = "bold", size = 8, family = "Arial"),
+        legend.title = element_text(face = "bold", size = 10, family = "Arial")
+      )
+    
+    # Combine plots using patchwork with dynamic widths
+    combined_plot <- wrap_plots(all_plots, ncol = length(all_plots), widths = relative_widths) +
+      plot_layout(guides = 'collect') &
+      theme(plot.margin = margin(5, 5, 5, 5))
+    
+    # Save the combined plot
+    output_filename <- file.path(output_directory, "Combined_Dotplots.png")
+    ggsave(filename = output_filename, plot = combined_plot, 
+           dpi = 300, height = 10, width = 0.5 * total_groups, limitsize = FALSE)
+    
+    message("Combined plot saved successfully.")
+    
+    return(combined_plot)
+  } else {
+    message("No plots were generated. Check the individual subgroup processing for errors.")
+    return(NULL)
+  }
+}
+
+create_combined_dotplot <- function(subgroups, output_directory, custom_palette, featureSetsList) {
+  all_plots <- list()
+  plot_info <- list()
+  total_groups <- 0
+
+  # Process each subgroup
+  for (subgroup in subgroups) {
+    file_wd <- file.path(output_directory, "Clustering_04", subgroup, paste0(subgroup, ".rds"))
+    if (!file.exists(file_wd)) {
+      message(sprintf("File for subgroup '%s' not found. Skipping.", subgroup))
+      next
+    }
+    
+    obj <- readRDS(file_wd)
+    result <- process_subgroup(subgroup, obj, custom_palette, featureSetsList)
+    if (!is.null(result)) {
+      all_plots[[subgroup]] <- result$plot
+      plot_info[[subgroup]] <- list(n_genes = result$n_genes, n_groups = result$n_groups)
+      total_groups <- total_groups + result$n_groups
+    }
+  }
+
+  # Combine all plots into a single figure
+  if (length(all_plots) > 0) {
+    # Calculate the relative widths based on the number of groups in each subplot
+    relative_widths <- sapply(plot_info, function(x) x$n_groups)
+    
+    # Add legend to the rightmost plot
+    subgroup_names <- names(all_plots)
+    all_plots[[subgroup_names[length(subgroup_names)]]] <- all_plots[[subgroup_names[length(subgroup_names)]]] +
+      theme(
+        legend.position = "right",
+        legend.text = element_text(face = "bold", size = 8, family = "Arial"),
+        legend.title = element_text(face = "bold", size = 10, family = "Arial")
+      )
+    
+    # Combine plots using patchwork with dynamic widths
+    combined_plot <- wrap_plots(all_plots, ncol = length(all_plots), widths = relative_widths) +
+      plot_layout(guides = 'collect') &
+      theme(plot.margin = margin(5, 5, 5, 5))
+    
+    # Save the combined plot
+    output_filename <- file.path(output_directory, "Combined_Dotplots.png")
+    ggsave(filename = output_filename, plot = combined_plot, 
+           dpi = 300, height = 10, width = 0.5 * total_groups, limitsize = FALSE)
+    
+    message("Combined plot saved successfully.")
+    
+    return(combined_plot)
+  } else {
+    message("No plots were generated. Check the individual subgroup processing for errors.")
+    return(NULL)
+  }
+}
