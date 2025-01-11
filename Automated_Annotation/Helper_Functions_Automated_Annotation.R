@@ -2571,3 +2571,70 @@ create_combined_dotplot <- function(subgroups, output_directory, custom_palette,
     return(NULL)
   }
 }
+
+process_subgroup <- function(subgroup, obj, custom_palette, featureSetsList) {
+  message(sprintf("Processing subgroup: %s", subgroup))
+  
+  tryCatch({
+    count_mat <- GetAssayData(object = obj, slot = "counts")
+    
+    if (!is.numeric(count_mat)) {
+      count_mat <- as.matrix(count_mat)
+      mode(count_mat) <- "numeric"
+      message("Converted count_mat to numeric matrix.")
+    }
+    
+    if (!"cell_type" %in% colnames(obj@meta.data)) {
+      stop("'cell_type' column not found in object metadata.")
+    }
+    
+    avgPctMat <- avgAndPctExpressed(count_mat, obj$cell_type, feature_normalize = TRUE, min_pct = 5)
+    
+    required_cols <- c("feature", "grp", "avgExpr", "pctExpr")
+    if (!all(required_cols %in% colnames(avgPctMat))) {
+      stop("avgPctMat is missing one or more required columns: ", 
+           paste(setdiff(required_cols, colnames(avgPctMat)), collapse = ", "))
+    }
+    
+    list_index <- get_list_index(subgroup)
+    subGenes <- featureSetsList[[list_index]] %>% unlist()
+    
+    avgPctMat <- avgPctMat[avgPctMat$feature %in% subGenes,]
+    
+    if (nrow(avgPctMat) == 0) {
+      message("No matching genes found for this subgroup. Skipping plot creation.")
+      return(NULL)
+    }
+    
+    wide_df <- unmelt_alt(avgPctMat, row_col = "feature", col_col = "grp", val_col = "avgExpr")
+    wide_df <- prettyOrderMat(wide_df)
+    grp_order <- colnames(wide_df$mat)
+    gene_order <- rev(rownames(wide_df$mat))
+    
+    p <- ggplot(avgPctMat, aes(x = grp, y = feature)) +
+      geom_point(aes(color = avgExpr, size = pctExpr)) +
+      scale_color_gradientn(colors = custom_palette, name = "Avg Expression") +
+      scale_size_continuous(range = c(0, 6), limits = c(0, 100), breaks = c(25, 50, 75, 100), name = "% Expressed") +
+      scale_y_discrete(limits = gene_order, expand = expansion(add = 0.5)) +
+      scale_x_discrete(limits = grp_order, expand = expansion(add = 0.5)) +
+      labs(title = subgroup) +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
+        axis.text.x = element_text(face = "bold", size = 8, angle = 90, hjust = 1, vjust = 0.5, family = "Arial"),
+        axis.text.y = element_text(face = "bold", size = 8, family = "Arial"),
+        axis.title = element_blank(),
+        legend.position = "none",
+        plot.margin = margin(20, 5, 5, 5),
+        panel.grid = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA, size = 1),
+        plot.background = element_rect(fill = "white", color = NA)
+      ) +
+      coord_cartesian(clip = "off")
+    
+    return(list(plot = p, n_genes = length(gene_order), n_groups = length(grp_order)))
+  }, error = function(e) {
+    message(sprintf("Error processing subgroup '%s': %s", subgroup, e$message))
+    return(NULL)
+  })
+}
