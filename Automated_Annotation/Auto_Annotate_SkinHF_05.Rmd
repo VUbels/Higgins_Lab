@@ -19,6 +19,9 @@ load_libraries(libraries)
 ```
 
 ```{r}
+#Some name to use for the Jaccard title plot
+Name = ""
+
 dir.create(paste0(output_directory, "Clustering_04"))
 
 pointSize <- 1.5
@@ -173,8 +176,64 @@ write.table(cell_type_counts_df, file = output_filename, sep = "\t", row.names =
 output_filename <- paste0(output_directory, "/Complete_Annotated_", project_name ,"_Object.rds")
 
 saveRDS(obj, output_filename)
+```
 
-winDialog("ok", "Script finished running")
+```{r}
+library(pheatmap)
+
+# Get the SNN graph from Seurat object
+snn_graph <- obj[["RNA_snn"]]
+snn_matrix <- as.matrix(snn_graph)
+
+# Convert to cluster-level similarities
+clusters <- unique(obj$FineClust)
+n_clusters <- length(clusters)
+
+cluster_snn <- matrix(0, nrow = n_clusters, ncol = n_clusters)
+rownames(cluster_snn) <- clusters
+colnames(cluster_snn) <- clusters
+
+# Calculate raw similarities
+for(i in seq_along(clusters)) {
+  for(j in seq_along(clusters)) {
+    cells_i <- WhichCells(obj, expression = FineClust == clusters[i])
+    cells_j <- WhichCells(obj, expression = FineClust == clusters[j])
+    
+    similarity <- mean(snn_matrix[cells_i, cells_j])
+    cluster_snn[i,j] <- similarity
+  }
+}
+
+# Create normalized matrix where each diagonal value is 1
+# and other values are scaled accordingly
+normalized_snn <- matrix(0, nrow = n_clusters, ncol = n_clusters)
+rownames(normalized_snn) <- clusters
+colnames(normalized_snn) <- clusters
+
+for(i in seq_along(clusters)) {
+  # Get self-similarity value (should be the highest)
+  self_similarity <- cluster_snn[i,i]
+  
+  # Scale this row by the self-similarity
+  normalized_snn[i,] <- cluster_snn[i,] / self_similarity
+}
+
+output_filename <- paste0(output_directory, "/Jaccard_Plot", project_name ,".png")
+
+# Plot heatmap
+pheatmap(normalized_snn,
+         display_numbers = TRUE,
+         number_format = "%.1f",
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         treeheight_row = 20,
+         treeheight_col = 20,
+         main = paste("Normalized", Name ,"Cluster Similarity"),
+         color = colorRampPalette(c("white", "#006199", "#DA4948"))(100),
+         filename = output_filename,
+         width = 6,
+         height = 6)
+
 ```
 
 ```{r}
